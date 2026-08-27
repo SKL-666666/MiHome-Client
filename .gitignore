@@ -1,0 +1,28 @@
+# ---- Build tool caches ----
+.hvigor/
+.hvigor-user/
+**/.hvigor/
+**/.hvigor-user/
+
+# ---- IDE ----
+.idea/
+**/.idea/
+
+# ---- Upstream reference source (already its own Git repository) ----
+.source/
+
+# ---- HarmonyOS / DevEco Studio generated ----
+oh_modules/
+**/oh_modules/
+build/
+**/build/
+entry/.test/
+.test/
+
+# ---- Build artifacts ----
+*.hap
+*.hsp
+*.app
+
+# ---- Logs ----
+*.log

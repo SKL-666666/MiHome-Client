@@ -1,0 +1,53 @@
+{
+  "app": {
+    // 签名配置不随仓库分发：请在 DevEco Studio 中通过
+    // File > Project Structure > Signing Configs 自行生成并填写。
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\yifen\\.ohos\\config\\default_miha_hm-main_um-bOvfDZee9uoUw2hkDGjKVHJ-36ttQcrTiXBKnxOc=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B69245398C6B4316DEF2C3DB82E5A18035639C097B43C278AB933C7D976A8E10F91405B52D33208",
+          "profile": "C:\\Users\\yifen\\.ohos\\config\\default_miha_hm-main_um-bOvfDZee9uoUw2hkDGjKVHJ-36ttQcrTiXBKnxOc=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\yifen\\.ohos\\config\\default_miha_hm-main_um-bOvfDZee9uoUw2hkDGjKVHJ-36ttQcrTiXBKnxOc=.p12",
+          "storePassword": "0000001B96E72772A204C469F6A046F6F1F9B83DD1A8B29F2822BD5B86A66626A584E437848E9CCA9808EA"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "compileSdkVersion": "6.1.0(23)",
+        "compatibleSdkVersion": "5.0.0(12)",
+        "targetSdkVersion": "6.1.0(23)",
+        "runtimeOS": "HarmonyOS"
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}
