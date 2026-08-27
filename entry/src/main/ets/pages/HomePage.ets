@@ -48,6 +48,7 @@ import {
   MijiaSheetBackground
 } from '../utils/DesignTokens';
 import { isCelsiusUnit, celsiusToFahrenheit } from '../utils/TemperatureDisplay';
+import { translateMiotUnit } from '../components/CapabilityRenderer';
 import { IconCircleButton } from '../components/IconCircleButton';
 import { AppSettingsStore } from '../storage/AppSettingsStore';
 import { AppBackground } from '../components/AppBackground';
@@ -1205,20 +1206,7 @@ struct HomePage {
   }
 
   private infoUnitText(unit: string): string {
-    const key = unit.trim().toLowerCase();
-    if (key === 'celsius') {
-      return '°C';
-    }
-    if (key === 'fahrenheit') {
-      return '°F';
-    }
-    if (key === 'percentage' || key === 'percent') {
-      return '%';
-    }
-    if (key === 'ug/m3' || key === 'ug/m³') {
-      return 'μg/m³';
-    }
-    return unit;
+    return translateMiotUnit(unit);
   }
 
   private openDeviceFromSheet(did: string): void {
@@ -1997,6 +1985,9 @@ struct HomePage {
         .fontWeight(FontWeight.Bold)
         .fontColor(MijiaOverviewCardValue)
         .maxLines(1)
+        .minFontSize(15)
+        .maxFontSize(22)
+        .heightAdaptivePolicy(TextHeightAdaptivePolicy.MIN_FONT_SIZE_FIRST)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%')
       if (this.infoShowMoreContent && $$.moreText.length > 0) {
@@ -2012,7 +2003,7 @@ struct HomePage {
       }
     }
     .width('100%')
-    .height(118)
+    .constraintSize({ minHeight: 118 })
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Start)
     .padding(12)
@@ -2252,7 +2243,8 @@ struct HomePage {
   @Builder
   mineTabContent() {
     Column({ space: 14 }) {
-      Blank().height(this.isWideScreen ? 12 : this.topOffset())
+      // 我的页无大标题头，从状态栏下方开始显示即可
+      Blank().height(this.isWideScreen ? 12 : (this.isWearable ? this.topOffset() : this.statusBarHeight + 12))
 
       Column({ space: 12 }) {
         Row({ space: 12 }) {
@@ -2501,7 +2493,7 @@ struct HomePage {
       .padding({ left: HwSpace.lg, right: HwSpace.lg })
     }
     .width('100%')
-    .height(INFO_CARD_HEIGHT)
+    .constraintSize({ minHeight: INFO_CARD_HEIGHT })
     .borderRadius(HwRadius.card)
     .backgroundColor(MijiaOverviewCard)
     .border({ width: 1, color: '#24FFFFFF' })
@@ -3413,7 +3405,6 @@ struct HomePage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(HwColor.background)
     .layoutWeight(this.isWearable ? 1 : 0)
   }
 
@@ -3434,7 +3425,6 @@ struct HomePage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(HwColor.background)
     .layoutWeight(this.isWearable ? 1 : 0)
   }
 
@@ -3455,7 +3445,6 @@ struct HomePage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(HwColor.background)
     .layoutWeight(this.isWearable ? 1 : 0)
   }
 
@@ -3476,7 +3465,6 @@ struct HomePage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(HwColor.background)
     .layoutWeight(this.isWearable ? 1 : 0)
   }
 
@@ -3519,7 +3507,6 @@ struct HomePage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(HwColor.background)
     .layoutWeight(this.isWearable ? 1 : 0)
   }
 

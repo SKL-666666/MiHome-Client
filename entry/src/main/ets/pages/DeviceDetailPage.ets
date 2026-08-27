@@ -311,10 +311,14 @@ export struct DeviceDetailPage {
       return;
     }
     const key = `${control.siid}.${control.piid}`;
+    const previous: Object | undefined = this.getValue(control);
+    this.updateValueState(key, value);
     try {
       await this.controller.setProperty(this.did, control.siid, control.piid, value);
-      this.updateValueState(key, value);
     } catch (err) {
+      if (previous !== undefined) {
+        this.updateValueState(key, previous);
+      }
       this.errorMessage = err instanceof Error ? err.message : '设置属性失败';
       Logger.error('set property failed, %{public}s', this.errorMessage);
     }
@@ -728,6 +732,8 @@ export struct DeviceDetailPage {
         .fontWeight(this.appFontWeight())
         .fontSize(9)
         .fontColor(MijiaOverviewCardText)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
       Column()
         .width('100%')
         .height(this.trendBarHeight(point.value))
@@ -738,6 +744,8 @@ export struct DeviceDetailPage {
         .fontWeight(this.appFontWeight())
         .fontSize(9)
         .fontColor(MijiaOverviewCardText)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
     .layoutWeight(1)
     .height('100%')
@@ -875,7 +883,10 @@ export struct DeviceDetailPage {
                 .fontSize(18)
                 .fontWeight(FontWeight.Bold)
                 .fontColor(MijiaOverviewCardValue)
-                .maxLines(1)
+                .maxLines(2)
+                .minFontSize(12)
+                .maxFontSize(18)
+                .heightAdaptivePolicy(TextHeightAdaptivePolicy.MIN_FONT_SIZE_FIRST)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
                 .width('100%')
             }
@@ -885,7 +896,7 @@ export struct DeviceDetailPage {
         }, (control: PropertyControlDescriptor) => `${control.siid}.${control.piid}`)
       }
       .width('100%')
-      .height(96)
+      .constraintSize({ minHeight: 96 })
       .alignItems(VerticalAlign.Center)
       .padding(HwSpace.md)
       .borderRadius(HwRadius.card)
@@ -1033,6 +1044,7 @@ export struct DeviceDetailPage {
           IconCircleButton({
             symbol: $r('sys.symbol.arrow_counterclockwise'),
             buttonEnabled: !this.refreshing,
+            spinning: this.refreshing,
             onAction: () => {
               this.refreshValues();
             }

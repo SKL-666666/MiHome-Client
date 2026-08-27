@@ -20,7 +20,7 @@ import { DeviceController } from '../controllers/DeviceController';
 import { DevicePropertyParam, DevicePropertyResult } from '../controllers/DeviceTransport';
 import { DeviceRemovalStore } from '../storage/DeviceRemovalStore';
 import { MIoTSpecInstance } from '../models/MIotSpecModels';
-import { PropertyControlDescriptor, buildServiceControls, CapabilityControlType } from '../components/CapabilityRenderer';
+import { PropertyControlDescriptor, buildServiceControls, CapabilityControlType, translateMiotText } from '../components/CapabilityRenderer';
 import { PropertyControl } from '../components/PropertyControl';
 
 interface PickerValueState {
@@ -37,6 +37,7 @@ struct SceneCreatePage {
   @StorageLink('fontWeightMode') fontWeightMode: string = 'system';
   @StorageLink('fontWeightValue') fontWeightValue: number = 400;
   @StorageProp('statusBarHeight') statusBarHeight: number = 0;
+  @StorageProp('navigationBarHeight') navigationBarHeight: number = 0;
   @StorageLink('selectedHomeId') selectedHomeId: string = '';
 
   @State sceneName: string = '';
@@ -209,6 +210,26 @@ struct SceneCreatePage {
     this.pickerValues = next;
   }
 
+  /** 枚举反查中文选项文本；布尔转开关；非数值兜底走全局词典 */
+  private actionValueText(control: PropertyControlDescriptor, value: Object): string {
+    for (let i = 0; i < control.optionValues.length; i++) {
+      if (String(control.optionValues[i]) === String(value)) {
+        return control.options[i];
+      }
+    }
+    const raw = String(value);
+    if (raw === 'true') {
+      return '开启';
+    }
+    if (raw === 'false') {
+      return '关闭';
+    }
+    if (Number.isNaN(Number(raw))) {
+      return translateMiotText(raw);
+    }
+    return raw;
+  }
+
   confirmAddActions(): void {
     if (this.pickerDevice === undefined) {
       return;
@@ -228,7 +249,8 @@ struct SceneCreatePage {
         siid: control.siid,
         piid: control.piid,
         label: control.label,
-        value: value
+        value: value,
+        valueText: this.actionValueText(control, value)
       });
       added++;
     }
@@ -492,7 +514,12 @@ struct SceneCreatePage {
         }
         .width('100%')
         .justifyContent(FlexAlign.Center)
-        .padding({ left: HwSpace.lg, right: HwSpace.lg, top: 8, bottom: 20 })
+        .padding({
+          left: HwSpace.lg,
+          right: HwSpace.lg,
+          top: 8,
+          bottom: this.navigationBarHeight + 20
+        })
         .backgroundColor(MijiaSheetBackground)
       }
     }
@@ -511,8 +538,8 @@ struct SceneCreatePage {
           .fontColor(Color.White)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(`${action.label} = ${String(action.value)}`)
-          .fontFamily(this.appFontFamily(`${action.label} = ${String(action.value)}`))
+        Text(`${action.label} = ${action.valueText !== undefined ? action.valueText : String(action.value)}`)
+          .fontFamily(this.appFontFamily(`${action.label} = ${action.valueText !== undefined ? action.valueText : String(action.value)}`))
           .fontWeight(this.appFontWeight())
           .fontSize(12)
           .fontColor(MijiaOverviewCardText)

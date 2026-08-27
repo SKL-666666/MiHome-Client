@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "com.mihome.client",
     "vendor": "cashmere",
-    "versionCode": 1000070,
-    "versionName": "1.0.7-OS",
+    "versionCode": 1000100,
+    "versionName": "1.0.0",
     "icon": "$media:ico",
     "label": "$string:app_name"
   }

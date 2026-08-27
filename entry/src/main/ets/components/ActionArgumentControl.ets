@@ -130,11 +130,12 @@ export struct ActionArgumentControl {
                   .fontSize(14)
                   .fontColor(this.value === this.argument.optionValues[index ?? 0]
                     ? MijiaOverviewCardValue : Color.White)
-                  .maxLines(1)
+                  .maxLines(2)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .textAlign(TextAlign.Center)
               }
               .width('100%')
-              .height(56)
+              .constraintSize({ minHeight: 56 })
               .justifyContent(FlexAlign.Center)
               .alignItems(HorizontalAlign.Center)
               .borderRadius(HwRadius.control)

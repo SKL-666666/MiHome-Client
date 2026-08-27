@@ -67,6 +67,7 @@ export struct PropertyControl {
   @State private lastValue: Object | undefined = undefined;
   @State private userGesture: boolean = false;
   @State private draft: string = '';
+  @State private powerPressed: boolean = false;
 
   aboutToAppear(): void {
     this.lastValue = this.value;
@@ -217,12 +218,13 @@ export struct PropertyControl {
 
   build() {
     if (this.compact) {
-      // 1×1 紧凑卡片：固定高度保证网格内所有卡片大小完全一致
+      // 1×1 紧凑卡片：minHeight 保证常规情况下网格内卡片大小一致，
+      // 内容过多时自动增高避免文字被裁剪
       Column({ space: 8 }) {
         this.compactContent()
       }
       .width('100%')
-      .height(132)
+      .constraintSize({ minHeight: 132 })
       .justifyContent(FlexAlign.SpaceBetween)
       .padding(HwSpace.md)
       .borderRadius(HwRadius.card)
@@ -288,6 +290,14 @@ export struct PropertyControl {
       .width(64)
       .height(64)
       .enabled(this.control.writable)
+      .scale({
+        x: this.powerPressed ? 0.92 : 1,
+        y: this.powerPressed ? 0.92 : 1
+      })
+      .animation({ duration: 120, curve: Curve.EaseOut })
+      .onTouch((event: TouchEvent) => {
+        this.powerPressed = event.type === TouchType.Down;
+      })
       .onClick(() => {
         this.onChanged(!this.boolOf(this.value));
       })
@@ -423,9 +433,10 @@ export struct PropertyControl {
           .fontSize(13)
           .fontColor(this.value === this.control.optionValues[index ?? 0]
             ? MijiaOverviewCardValue : Color.White)
-          .maxLines(1)
+          .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .textAlign(TextAlign.Center)
+          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
           .borderRadius(HwRadius.pill)
           .backgroundColor(this.value === this.control.optionValues[index ?? 0]
             ? '#263379B7' : '#1A000000')
@@ -641,11 +652,12 @@ export struct PropertyControl {
                 .fontSize(14)
                 .fontColor(this.value === this.control.optionValues[index ?? 0]
                   ? MijiaOverviewCardValue : Color.White)
-                .maxLines(1)
+                .maxLines(2)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .textAlign(TextAlign.Center)
             }
             .width('100%')
-            .height(56)
+            .constraintSize({ minHeight: 56 })
             .justifyContent(FlexAlign.Center)
             .alignItems(HorizontalAlign.Center)
             .borderRadius(HwRadius.control)

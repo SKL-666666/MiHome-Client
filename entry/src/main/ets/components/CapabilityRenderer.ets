@@ -212,10 +212,29 @@ const MIOT_TEXT_DICTIONARY: Record<string, string> = {
   'anion': '负离子',
   'plasma': '等离子',
   'uv': '紫外线',
-  'filter': '滤芯'
+    'filter': '滤芯',
+    // 设备通用状态枚举补录
+    'idle': '空闲',
+  'busy': '繁忙',
+  'running': '运行中',
+  'stopped': '已停止',
+  'opened': '已打开',
+  'opening': '打开中',
+  'closed': '已关闭',
+  'closing': '关闭中',
+  'on-going': '进行中',
+  'unknown': '未知',
+  'none': '无',
+  'default': '默认',
+  'silent': '静音模式',
+  'dnd': '勿扰',
+  'away': '离家',
+  'home': '在家',
+  'vacation': '度假'
 };
 
-function translateMiotText(input: string): string {
+/** 全局通用 MIoT 词条翻译：词典精确匹配 + 组合词/分词多级回退，未命中原样返回 */
+export function translateMiotText(input: string): string {
   const key = input.trim().toLowerCase().replace(/[-_]/g, ' ');
   const exact = MIOT_TEXT_DICTIONARY[key];
   if (exact !== undefined) {
@@ -1146,7 +1165,8 @@ const MIOT_UNIT_DICTIONARY: Record<string, string> = {
   'ug': 'μg'
 };
 
-function translateMiotUnit(input: string): string {
+/** 全局通用 MIoT 单位翻译 */
+export function translateMiotUnit(input: string): string {
   if (input.length === 0) {
     return input;
   }

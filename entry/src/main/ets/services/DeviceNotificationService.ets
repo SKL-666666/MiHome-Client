@@ -26,6 +26,7 @@ import {
   DeviceEventName
 } from '../events/DeviceEventBus';
 import { Logger } from '../utils/Logger';
+import { translateMiotText } from '../components/CapabilityRenderer';
 
 export class DeviceNotificationService {
   private readonly eventBus: DeviceEventBus;
@@ -84,6 +85,6 @@ export class DeviceNotificationService {
     }
     const payload = event.payload as Record<string, Object>;
     const name = payload['name'] ?? payload['description'] ?? '设备事件';
-    return String(name);
+    return translateMiotText(String(name));
   }
 }

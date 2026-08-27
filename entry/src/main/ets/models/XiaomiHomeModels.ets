@@ -99,6 +99,8 @@ export interface LocalSceneAction {
   piid: number;
   label: string;
   value: Object;
+  /** 动作值的展示文本（枚举已译为中文；旧数据缺省时回退 String(value)） */
+  valueText?: string;
 }
 
 /** 用户在本应用内自建的本地智能（仅本地执行，不同步米家云端） */

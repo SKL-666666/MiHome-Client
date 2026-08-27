@@ -184,15 +184,11 @@ struct AboutPage {
           .margin({ top: 28 })
 
           Column({ space: 0 }) {
-            this.linkRow('开发者：开心就好无需烦恼', 'https://www.coolapk.com/u/6069943')
+            this.linkRow('开发者：开心就好无需烦恼', 'https://www.coolapk.com/u/40478967')
             Divider()
               .color('#14000000')
               .margin({ left: HwSpace.lg, right: HwSpace.lg })
-            this.linkRow('项目地址', '')
-            Divider()
-              .color('#14000000')
-              .margin({ left: HwSpace.lg, right: HwSpace.lg })
-            this.linkRow('米家开源地址', 'https://github.com/XiaoMi/ha_xiaomi_home')
+            this.linkRow('项目地址', 'https://github.com/SKL-666666/MiHome-Client')
           }
           .width('100%')
           .borderRadius(HwRadius.card)
