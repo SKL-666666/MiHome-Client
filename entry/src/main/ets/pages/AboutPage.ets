@@ -128,42 +128,21 @@ struct AboutPage {
   }
 
   build() {
-    Stack() {
+    Stack({ alignContent: Alignment.TopStart }) {
       AppBackground()
       Column() {
-        Row() {
-          IconCircleButton({
-          symbol: $r('sys.symbol.chevron_left'),
-          buttonSize: 40,
-          iconSize: 20,
-          onAction: () => {
-            router.back();
-          }
-        })
-        Text('关于')
-          .fontFamily(this.appFontFamily('关于'))
-          .fontWeight(this.appFontWeight())
-          .margin({ left: HwSpace.md })
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(HwColor.textPrimary)
-        Blank()
-      }
-      .width('100%')
-      .height(56 + this.statusBarHeight)
-      .padding({ left: 16, right: 16, top: this.statusBarHeight })
-      .backgroundColor('#FFFFFF')
 
       Scroll() {
         Column({ space: 24 }) {
+          Blank().height(56 + this.statusBarHeight)
           Column({ space: 10 }) {
             Image($r('app.media.ico'))
               .width(96)
               .height(96)
               .borderRadius(24)
               .objectFit(ImageFit.Cover)
-            Text('鸿米家')
-              .fontFamily(this.appFontFamily('鸿米家'))
+            Text('米居')
+              .fontFamily(this.appFontFamily('米居'))
               .fontWeight(this.appFontWeight())
               .fontSize(22)
               .fontWeight(FontWeight.Bold)
@@ -184,7 +163,7 @@ struct AboutPage {
           .margin({ top: 28 })
 
           Column({ space: 0 }) {
-            this.linkRow('开发者：开心就好无需烦恼', 'https://www.coolapk.com/u/40478967')
+            this.linkRow('开发者：SKL666666', 'https://www.coolapk.com/u/40478967')
             Divider()
               .color('#14000000')
               .margin({ left: HwSpace.lg, right: HwSpace.lg })
@@ -215,6 +194,30 @@ struct AboutPage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.Transparent)
+
+      Row() {
+        IconCircleButton({
+          symbol: $r('sys.symbol.chevron_left'),
+          buttonSize: 40,
+          iconSize: 20,
+          onAction: () => {
+            router.back();
+          }
+        })
+        Text('关于')
+          .fontFamily(this.appFontFamily('关于'))
+          .fontWeight(this.appFontWeight())
+          .margin({ left: HwSpace.md })
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(HwColor.textPrimary)
+        Blank()
+      }
+      .width('100%')
+      .height(56 + this.statusBarHeight)
+      .padding({ left: 16, right: 16, top: this.statusBarHeight })
+      .backgroundColor('#59FFFFFF')
+      .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
     }
     .width('100%')
     .height('100%')

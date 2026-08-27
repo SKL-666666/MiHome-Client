@@ -408,7 +408,7 @@ struct SceneCreatePage {
       }
     }
     .width('100%')
-    .height('100%')
+    .layoutWeight(1)
   }
 
   @Builder
@@ -524,7 +524,7 @@ struct SceneCreatePage {
       }
     }
     .width('100%')
-    .height('100%')
+    .layoutWeight(1)
   }
 
   @Builder
@@ -703,7 +703,8 @@ struct SceneCreatePage {
       .width('100%')
       .height(56 + this.statusBarHeight)
       .padding({ left: 16, right: 16, top: this.statusBarHeight })
-      .backgroundColor('#FFFFFF')
+      .backgroundColor('#59FFFFFF')
+      .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
     }
     .width('100%')
     .height('100%')

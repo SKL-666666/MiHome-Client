@@ -9,11 +9,11 @@
         "material": {
           "certpath": "C:\\Users\\yifen\\.ohos\\config\\default_miha_hm-main_um-bOvfDZee9uoUw2hkDGjKVHJ-36ttQcrTiXBKnxOc=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B69245398C6B4316DEF2C3DB82E5A18035639C097B43C278AB933C7D976A8E10F91405B52D33208",
+          "keyPassword": "0000001A078785B64DC986EF8366DCA54C84211C68471B743ACB413515D115559323113DF737B416B37F",
           "profile": "C:\\Users\\yifen\\.ohos\\config\\default_miha_hm-main_um-bOvfDZee9uoUw2hkDGjKVHJ-36ttQcrTiXBKnxOc=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "C:\\Users\\yifen\\.ohos\\config\\default_miha_hm-main_um-bOvfDZee9uoUw2hkDGjKVHJ-36ttQcrTiXBKnxOc=.p12",
-          "storePassword": "0000001B96E72772A204C469F6A046F6F1F9B83DD1A8B29F2822BD5B86A66626A584E437848E9CCA9808EA"
+          "storePassword": "0000001A73CC6295A1AE077B6314AE958E282834CAD291B63BB70DE98942260E9C657CD782EC4966DE54"
         }
       }
     ],

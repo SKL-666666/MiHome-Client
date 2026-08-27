@@ -1059,7 +1059,8 @@ export struct DeviceDetailPage {
         .width('100%')
         .height((this.isWearable ? 52 : 56) + this.statusBarHeight)
         .padding({ left: this.isWearable ? 10 : 16, right: this.isWearable ? 10 : 16, top: this.statusBarHeight })
-        .backgroundColor('#FFFFFF')
+        .backgroundColor('#59FFFFFF')
+        .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
       }
       .width('100%')
       .height('100%')

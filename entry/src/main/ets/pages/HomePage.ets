@@ -256,6 +256,11 @@ struct HomePage {
   @State showExcludeSheet: boolean = false;
   @State showFamilySheet: boolean = false;
   @State homeRefreshing: boolean = false;
+  @State smartRefreshing: boolean = false;
+  @State alertRefreshing: boolean = false;
+  @State homeRefreshText: string = '下拉刷新';
+  @State smartRefreshText: string = '下拉刷新';
+  @State alertRefreshText: string = '下拉刷新';
   @State scenes: XiaomiScene[] = [];
   @State localScenes: LocalScene[] = [];
   @State scenesLoading: boolean = false;
@@ -713,7 +718,7 @@ struct HomePage {
         }
       }
       this.alerts = items;
-      FeedbackLogService.recordOperation('PAGE', `信息提醒页: ${items.length} 条提醒`);
+      FeedbackLogService.recordOperation('PAGE', `信息页: ${items.length} 条提醒`);
     } catch (err) {
       Logger.error('build alerts failed, %{public}s',
         err instanceof Error ? err.message : String(err));
@@ -1570,7 +1575,7 @@ struct HomePage {
       return '智能';
     }
     if (this.activeTab === 2) {
-      return '信息提醒';
+      return '信息';
     }
     return '我的';
   }
@@ -1616,7 +1621,7 @@ struct HomePage {
       return '智能';
     }
     if (index === 2) {
-      return '信息提醒';
+      return '信息';
     }
     return '我的';
   }
@@ -1692,7 +1697,7 @@ struct HomePage {
       alertNormal.fontColor([HwColor.textSecondary]);
       const alertSelected = new SymbolGlyphModifier($r('sys.symbol.bell_fill'));
       alertSelected.fontColor([HwColor.primary]);
-      return new BottomTabBarStyle({ normal: alertNormal, selected: alertSelected }, '信息提醒');
+      return new BottomTabBarStyle({ normal: alertNormal, selected: alertSelected }, '信息');
     }
     const mineNormal = new SymbolGlyphModifier($r('sys.symbol.person'));
     mineNormal.fontColor([HwColor.textSecondary]);
@@ -1736,33 +1741,13 @@ struct HomePage {
             this.showFamilySheet = true;
           }
         })
-      } else if (this.activeTab === 1) {
-        IconCircleButton({
-          symbol: $r('sys.symbol.arrow_counterclockwise'),
-          buttonSize: 36,
-          iconSize: 18,
-          buttonEnabled: !this.scenesLoading,
-          onAction: (): void => {
-            FeedbackLogService.recordOperation('UI', '刷新智能页');
-            this.loadScenes(false);
-          }
-        })
-      } else if (this.activeTab === 2) {
-        IconCircleButton({
-          symbol: $r('sys.symbol.arrow_counterclockwise'),
-          buttonSize: 36,
-          iconSize: 18,
-          buttonEnabled: !this.alertsLoading,
-          onAction: (): void => {
-            FeedbackLogService.recordOperation('UI', '刷新信息提醒页');
-            this.buildAlerts();
-          }
-        })
       }
     }
     .width('100%')
     .height(56 + this.statusBarHeight)
     .padding({ left: 20, right: 20, top: this.statusBarHeight })
+    .backgroundColor('#59FFFFFF')
+    .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
   }
 
   private isRouterDevice(device: XiaomiDevice): boolean {
@@ -1874,8 +1859,9 @@ struct HomePage {
     .width('100%')
     .linearGradient({
       angle: 90,
-      colors: [[MijiaHeaderGradient[0], 0], [MijiaHeaderGradient[1], 0.5], [MijiaHeaderGradient[2], 1]]
+      colors: [['#E62F658C', 0], ['#E63B7094', 0.5], ['#E646789C', 1]]
     })
+    .backgroundEffect({ radius: 30, saturation: 1.5, color: '#33FFFFFF' })
     .height(this.statusBarHeight + 96)
     .padding({ top: this.statusBarHeight })
   }
@@ -2244,7 +2230,7 @@ struct HomePage {
   mineTabContent() {
     Column({ space: 14 }) {
       // 我的页无大标题头，从状态栏下方开始显示即可
-      Blank().height(this.isWideScreen ? 12 : (this.isWearable ? this.topOffset() : this.statusBarHeight + 12))
+      Blank().height(this.isWideScreen ? 12 : (this.isWearable ? this.topOffset() : 12))
 
       Column({ space: 12 }) {
         Row({ space: 12 }) {
@@ -3280,14 +3266,28 @@ struct HomePage {
       }
 
       if (this.scenesLoading) {
-        Text('加载中…')
-          .fontFamily(this.appFontFamily('加载中…'))
-          .fontWeight(this.appFontWeight())
-          .fontSize(14)
-          .fontColor(HwColor.textSecondary)
-          .width('100%')
-          .textAlign(TextAlign.Center)
-          .padding({ top: 24, bottom: 24 })
+        Row() {
+          Row({ space: 6 }) {
+            LoadingProgress()
+              .width(14)
+              .height(14)
+              .color(HwColor.textSecondary)
+            Text('加载中…')
+              .fontFamily(this.appFontFamily('加载中…'))
+              .fontWeight(this.appFontWeight())
+              .fontSize(12)
+              .fontColor(HwColor.textSecondary)
+          }
+          .alignItems(VerticalAlign.Center)
+          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+          .borderRadius(16)
+          .backgroundColor('#99FFFFFF')
+        }
+        .justifyContent(FlexAlign.Center)
+        .width('100%')
+        .padding({ top: 48 })
+        .position({ x: 0, y: 0 })
+        .hitTestBehavior(HitTestMode.None)
       }
       if (this.scenesError.length > 0) {
         Text(this.scenesError)
@@ -3337,14 +3337,28 @@ struct HomePage {
       Blank().height(this.isWideScreen ? 12 : (this.isWearable ? this.topOffset() : 4))
 
       if (this.alertsLoading) {
-        Text('加载中…')
-          .fontFamily(this.appFontFamily('加载中…'))
-          .fontWeight(this.appFontWeight())
-          .fontSize(14)
-          .fontColor(HwColor.textSecondary)
-          .width('100%')
-          .textAlign(TextAlign.Center)
-          .padding({ top: 24, bottom: 24 })
+        Row() {
+          Row({ space: 6 }) {
+            LoadingProgress()
+              .width(14)
+              .height(14)
+              .color(HwColor.textSecondary)
+            Text('加载中…')
+              .fontFamily(this.appFontFamily('加载中…'))
+              .fontWeight(this.appFontWeight())
+              .fontSize(12)
+              .fontColor(HwColor.textSecondary)
+          }
+          .alignItems(VerticalAlign.Center)
+          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+          .borderRadius(16)
+          .backgroundColor('#99FFFFFF')
+        }
+        .justifyContent(FlexAlign.Center)
+        .width('100%')
+        .padding({ top: 48 })
+        .position({ x: 0, y: 0 })
+        .hitTestBehavior(HitTestMode.None)
       }
       if (!this.alertsLoading && this.alerts.length === 0) {
         Column({ space: 8 }) {
@@ -3381,27 +3395,101 @@ struct HomePage {
   }
 
   @Builder
-  homePane() {
-    Column() {
-      if (this.isWideScreen) {
-        this.tabHeader()
-      } else if (!this.isWearable) {
-        this.homeHeader()
+  homeRefreshHeader() {
+    Row({ space: 6 }) {
+      if (this.homeRefreshing) {
+        LoadingProgress()
+          .width(20)
+          .height(20)
+          .color(HwColor.primary)
       }
-      Refresh({ refreshing: $$this.homeRefreshing }) {
-        Scroll(this.homeScroller) {
-          this.homeTabContent()
+      Text(this.homeRefreshText)
+        .fontSize(13)
+        .fontColor(HwColor.textSecondary)
+    }
+    .width('100%')
+    .height(44)
+    .justifyContent(FlexAlign.Center)
+  }
+
+  @Builder
+  smartRefreshHeader() {
+    Row({ space: 6 }) {
+      if (this.smartRefreshing) {
+        LoadingProgress()
+          .width(20)
+          .height(20)
+          .color(HwColor.primary)
+      }
+      Text(this.smartRefreshText)
+        .fontSize(13)
+        .fontColor(HwColor.textSecondary)
+    }
+    .width('100%')
+    .height(44)
+    .justifyContent(FlexAlign.Center)
+  }
+
+  @Builder
+  alertRefreshHeader() {
+    Row({ space: 6 }) {
+      if (this.alertRefreshing) {
+        LoadingProgress()
+          .width(20)
+          .height(20)
+          .color(HwColor.primary)
+      }
+      Text(this.alertRefreshText)
+        .fontSize(13)
+        .fontColor(HwColor.textSecondary)
+    }
+    .width('100%')
+    .height(44)
+    .justifyContent(FlexAlign.Center)
+  }
+
+  @Builder
+  homePane() {
+    Stack({ alignContent: Alignment.Top }) {
+      Column() {
+        if (!this.isWearable) {
+          if (this.isWideScreen) {
+            Blank().height(56 + this.statusBarHeight)
+          } else {
+            Blank().height(this.statusBarHeight + 96)
+          }
+        }
+        Refresh({ refreshing: $$this.homeRefreshing, offset: 48, builder: this.homeRefreshHeader() }) {
+          Scroll(this.homeScroller) {
+            Column() {
+              this.homeTabContent()
+            }
+            .width('100%')
+          }
+          .width('100%')
+          .height('100%')
+          .align(this.cardsFromTop ? Alignment.Top : Alignment.Center)
+          .scrollBar(BarState.Off)
+          .edgeEffect(EdgeEffect.Spring)
         }
         .width('100%')
-        .align(this.cardsFromTop ? Alignment.Top : Alignment.Center)
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.Spring)
+        .layoutWeight(1)
+        .onRefreshing(() => {
+          this.handleHomePullRefresh();
+        })
+        .onStateChange((state: RefreshStatus) => {
+          this.homeRefreshText = this.refreshStateText(state);
+        })
       }
       .width('100%')
-      .layoutWeight(1)
-      .onRefreshing(() => {
-        this.handleHomePullRefresh();
-      })
+      .height('100%')
+      if (!this.isWearable) {
+        if (this.isWideScreen) {
+          this.tabHeader()
+        } else {
+          this.homeHeader()
+        }
+      }
     }
     .width('100%')
     .height('100%')
@@ -3410,18 +3498,38 @@ struct HomePage {
 
   @Builder
   smartPane() {
-    Column() {
+    Stack({ alignContent: Alignment.Top }) {
+      Column() {
+        if (!this.isWearable) {
+          Blank().height(56 + this.statusBarHeight)
+        }
+        Refresh({ refreshing: $$this.smartRefreshing, offset: 48, builder: this.smartRefreshHeader() }) {
+          Scroll(this.smartScroller) {
+            Column() {
+              this.smartTabContent()
+            }
+            .width('100%')
+          }
+          .width('100%')
+          .height('100%')
+          .align(this.cardsFromTop ? Alignment.Top : Alignment.Center)
+          .scrollBar(BarState.Off)
+          .edgeEffect(EdgeEffect.Spring)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .onRefreshing(() => {
+          this.handleSmartPullRefresh();
+        })
+        .onStateChange((state: RefreshStatus) => {
+          this.smartRefreshText = this.refreshStateText(state);
+        })
+      }
+      .width('100%')
+      .height('100%')
       if (!this.isWearable) {
         this.tabHeader()
       }
-      Scroll(this.smartScroller) {
-        this.smartTabContent()
-      }
-      .width('100%')
-      .layoutWeight(1)
-      .align(this.cardsFromTop ? Alignment.Top : Alignment.Center)
-      .scrollBar(BarState.Off)
-      .edgeEffect(EdgeEffect.Spring)
     }
     .width('100%')
     .height('100%')
@@ -3430,18 +3538,38 @@ struct HomePage {
 
   @Builder
   alertPane() {
-    Column() {
+    Stack({ alignContent: Alignment.Top }) {
+      Column() {
+        if (!this.isWearable) {
+          Blank().height(56 + this.statusBarHeight)
+        }
+        Refresh({ refreshing: $$this.alertRefreshing, offset: 48, builder: this.alertRefreshHeader() }) {
+          Scroll(this.alertScroller) {
+            Column() {
+              this.alertTabContent()
+            }
+            .width('100%')
+          }
+          .width('100%')
+          .height('100%')
+          .align(this.cardsFromTop ? Alignment.Top : Alignment.Center)
+          .scrollBar(BarState.Off)
+          .edgeEffect(EdgeEffect.Spring)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .onRefreshing(() => {
+          this.handleAlertPullRefresh();
+        })
+        .onStateChange((state: RefreshStatus) => {
+          this.alertRefreshText = this.refreshStateText(state);
+        })
+      }
+      .width('100%')
+      .height('100%')
       if (!this.isWearable) {
         this.tabHeader()
       }
-      Scroll(this.alertScroller) {
-        this.alertTabContent()
-      }
-      .width('100%')
-      .layoutWeight(1)
-      .align(this.cardsFromTop ? Alignment.Top : Alignment.Center)
-      .scrollBar(BarState.Off)
-      .edgeEffect(EdgeEffect.Spring)
     }
     .width('100%')
     .height('100%')
@@ -3450,18 +3578,24 @@ struct HomePage {
 
   @Builder
   minePane() {
-    Column() {
-      if (!this.isWearable) {
-        this.tabHeader()
-      }
+    Stack({ alignContent: Alignment.Top }) {
       Scroll(this.mineScroller) {
-        this.mineTabContent()
+        Column() {
+          if (!this.isWearable) {
+            Blank().height(56 + this.statusBarHeight)
+          }
+          this.mineTabContent()
+        }
+        .width('100%')
       }
       .width('100%')
-      .layoutWeight(1)
+      .height('100%')
       .align(this.cardsFromTop ? Alignment.Top : Alignment.Center)
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      if (!this.isWearable) {
+        this.tabHeader()
+      }
     }
     .width('100%')
     .height('100%')
@@ -3525,12 +3659,39 @@ struct HomePage {
     });
   }
 
+  private refreshStateText(state: RefreshStatus): string {
+    if (state === RefreshStatus.OverDrag) {
+      return '释放立即刷新';
+    }
+    if (state === RefreshStatus.Refresh) {
+      return '正在刷新…';
+    }
+    if (state === RefreshStatus.Done) {
+      return '刷新完成';
+    }
+    return '下拉刷新';
+  }
+
   private handleHomePullRefresh(): void {
     this.homeRefreshing = true;
     this.loadData(true, true).then(() => {
       this.loadInfoData(true).finally(() => {
         this.homeRefreshing = false;
       });
+    });
+  }
+
+  private handleSmartPullRefresh(): void {
+    this.smartRefreshing = true;
+    this.loadScenes(true).finally(() => {
+      this.smartRefreshing = false;
+    });
+  }
+
+  private handleAlertPullRefresh(): void {
+    this.alertRefreshing = true;
+    this.buildAlerts().finally(() => {
+      this.alertRefreshing = false;
     });
   }
 
@@ -3685,34 +3846,6 @@ struct HomePage {
                 action: () => {
                   FeedbackLogService.recordOperation('UI', '打开选择家庭');
                   this.showFamilySheet = true;
-                }
-              }
-            }
-          ]
-        } : this.activeTab === 1 ? {
-          value: [
-            {
-              content: {
-                label: '刷新',
-                icon: $r('sys.symbol.arrow_counterclockwise'),
-                isEnabled: !this.scenesLoading,
-                action: () => {
-                  FeedbackLogService.recordOperation('UI', '刷新智能页');
-                  this.loadScenes(false);
-                }
-              }
-            }
-          ]
-        } : this.activeTab === 2 ? {
-          value: [
-            {
-              content: {
-                label: '刷新',
-                icon: $r('sys.symbol.arrow_counterclockwise'),
-                isEnabled: !this.alertsLoading,
-                action: () => {
-                  FeedbackLogService.recordOperation('UI', '刷新信息提醒页');
-                  this.buildAlerts();
                 }
               }
             }

@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "com.mihome.client",
+    "bundleName": "com.miju.client",
     "vendor": "cashmere",
     "versionCode": 1000100,
     "versionName": "1.0.0",

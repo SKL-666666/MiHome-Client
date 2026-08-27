@@ -23,7 +23,7 @@ import { HwColor } from '../utils/DesignTokens';
 
 /**
  * 全局页面底图。
- * 用户设置自定义背景后展示背景图片，并在其上叠加半透明遮罩保证内容可读；
+ * 用户设置自定义背景后直接展示背景图片，不叠加蒙版；
  * 未设置背景时使用 HwColor.background 浅色底。
  * 注意：背景 Image 上不添加边框/圆角/裁剪等修饰，避免触发渲染服务异常。
  */
@@ -39,10 +39,6 @@ export struct AppBackground {
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Cover)
-        Column()
-          .width('100%')
-          .height('100%')
-          .backgroundColor(this.isDarkMode ? '#CC000000' : '#B3FFFFFF')
       } else {
         Column()
           .width('100%')

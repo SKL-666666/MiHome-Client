@@ -248,34 +248,13 @@ struct FeedbackPage {
   }
 
   build() {
-    Stack() {
+    Stack({ alignContent: Alignment.TopStart }) {
       AppBackground()
       Column() {
-        Row() {
-          IconCircleButton({
-            symbol: $r('sys.symbol.chevron_left'),
-            buttonSize: 40,
-            iconSize: 20,
-            onAction: () => {
-              this.goBack();
-            }
-          })
-          Text('反馈')
-            .fontFamily(this.appFontFamily('反馈'))
-            .fontWeight(this.appFontWeight())
-            .margin({ left: HwSpace.md })
-            .fontSize(20)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(HwColor.textPrimary)
-          Blank()
-        }
-        .width('100%')
-        .height(56 + this.statusBarHeight)
-        .padding({ left: 16, right: 16, top: this.statusBarHeight })
-        .backgroundColor('#FFFFFF')
 
         Scroll() {
           Column({ space: 16 }) {
+            Blank().height(40 + this.statusBarHeight)
             Column({ space: 12 }) {
               if (this.logEnabled) {
                 this.modeStatusCard()
@@ -415,6 +394,30 @@ struct FeedbackPage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.Transparent)
+
+      Row() {
+        IconCircleButton({
+          symbol: $r('sys.symbol.chevron_left'),
+          buttonSize: 40,
+          iconSize: 20,
+          onAction: () => {
+            this.goBack();
+          }
+        })
+        Text('反馈')
+          .fontFamily(this.appFontFamily('反馈'))
+          .fontWeight(this.appFontWeight())
+          .margin({ left: HwSpace.md })
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(HwColor.textPrimary)
+        Blank()
+      }
+      .width('100%')
+      .height(56 + this.statusBarHeight)
+      .padding({ left: 16, right: 16, top: this.statusBarHeight })
+      .backgroundColor('#59FFFFFF')
+      .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
     }
     .width('100%')
     .height('100%')

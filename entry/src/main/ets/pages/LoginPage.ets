@@ -66,6 +66,10 @@ struct LoginPage {
     FeedbackLogService.setCurrentPage('登录页');
   }
 
+  aboutToDisappear(): void {
+    this.loginCancelled = true;
+  }
+
   @State qrUrl: string = '';
   @State loading: boolean = false;
   @State statusMessage: string = '';
@@ -77,6 +81,7 @@ struct LoginPage {
 
   private loginService: MijiaQrLoginService | null = null;
   private ticket: MijiaQrLoginTicket | null = null;
+  private loginCancelled: boolean = false;
 
   async startMijiaLogin(): Promise<void> {
     if (this.loading) {
@@ -85,19 +90,39 @@ struct LoginPage {
     this.loading = true;
     this.errorMessage = '';
     this.statusMessage = '';
+    this.loginCancelled = false;
+    const maxAttempts = 6;
     try {
-      this.loginService = new MijiaQrLoginService();
-      this.ticket = await this.loginService.buildLoginTicket();
-      this.qrUrl = this.ticket.qr;
-      this.statusMessage = '请使用小米/米家 App 扫码登录';
-      const auth = await this.loginService.pollTicket(this.ticket);
-      await xiaomiDataService.setMijiaAuth(auth);
-      AppStorage.setOrCreate('selectedHomeId', '');
-      AppStorage.setOrCreate('selectedHomeName', '');
-      AppStorage.setOrCreate('homeSelectionVersion', 0);
-      AppSettingsStore.setString('selectedHomeId', '');
-      AppSettingsStore.setString('selectedHomeName', '');
-      this.getUIContext().getRouter().replaceUrl({ url: 'pages/HomePage' });
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (this.loginCancelled) {
+          return;
+        }
+        try {
+          this.loginService = new MijiaQrLoginService();
+          this.ticket = await this.loginService.buildLoginTicket();
+          this.qrUrl = this.ticket.qr;
+          this.statusMessage = attempt === 1 ? '请使用小米/米家 App 扫码登录' : '二维码已自动刷新，请重新扫码';
+          const auth = await this.loginService.pollTicket(this.ticket);
+          await xiaomiDataService.setMijiaAuth(auth);
+          AppStorage.setOrCreate('selectedHomeId', '');
+          AppStorage.setOrCreate('selectedHomeName', '');
+          AppStorage.setOrCreate('homeSelectionVersion', 0);
+          AppSettingsStore.setString('selectedHomeId', '');
+          AppSettingsStore.setString('selectedHomeName', '');
+          this.getUIContext().getRouter().replaceUrl({ url: 'pages/HomePage' });
+          return;
+        } catch (err) {
+          if (this.loginCancelled) {
+            return;
+          }
+          const message = err instanceof Error ? err.message : '登录失败';
+          Logger.error('mijia qr login attempt failed, %{public}s', message);
+          if (attempt >= maxAttempts) {
+            throw err instanceof Error ? err : new Error(message);
+          }
+          this.statusMessage = '二维码已过期，正在自动刷新…';
+        }
+      }
     } catch (err) {
       this.errorMessage = err instanceof Error ? err.message : '登录失败';
       Logger.error('mijia qr login failed, %{public}s', this.errorMessage);

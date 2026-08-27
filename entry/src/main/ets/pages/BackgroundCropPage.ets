@@ -333,7 +333,8 @@ struct BackgroundCropPage {
       .width('100%')
       .height(56 + this.statusBarHeight)
       .padding({ left: 16, right: 16, top: this.statusBarHeight })
-      .backgroundColor('#FFFFFF')
+      .backgroundColor('#59FFFFFF')
+      .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
 
       if (this.errorMessage.length > 0) {
         Text(this.errorMessage)

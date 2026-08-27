@@ -73,6 +73,7 @@ struct SettingsPage {
   @StorageLink('temperatureShowUnit') temperatureShowUnit: boolean = false;
   @StorageLink('backgroundImage') wallpaperImage: string = '';
   @StorageLink('infoShowMoreContent') infoShowMoreContent: boolean = true;
+  @StorageLink('infoRefreshInterval') infoRefreshInterval: string = '30';
   @StorageLink('sortDevicesByRoom') sortDevicesByRoom: boolean = false;
   @State clearMessage: string = '';
 
@@ -124,9 +125,35 @@ struct SettingsPage {
     this.temperatureFahrenheit = false;
     this.temperatureShowUnit = false;
     this.infoShowMoreContent = true;
+    this.infoRefreshInterval = '30';
     this.sortDevicesByRoom = false;
     this.wallpaperImage = '';
     this.clearMessage = '已清空所有记住的设置项';
+  }
+
+  refreshIntervalLabel(value: string): string {
+    const seconds = Number.parseInt(value, 10);
+    if (Number.isNaN(seconds) || seconds < 60) {
+      return '30秒';
+    }
+    if (seconds % 60 === 0) {
+      return `${seconds / 60}分钟`;
+    }
+    return `${seconds}秒`;
+  }
+
+  cycleRefreshInterval(): void {
+    const options: string[] = ['30', '60', '120', '300', '600'];
+    const current = AppStorage.get<string>('infoRefreshInterval') ?? '30';
+    let index = options.indexOf(current);
+    if (index < 0) {
+      index = 0;
+    }
+    const next = options[(index + 1) % options.length];
+    AppStorage.setOrCreate('infoRefreshInterval', next);
+    AppSettingsStore.setString('infoRefreshInterval', next);
+    this.infoRefreshInterval = next;
+    FeedbackLogService.recordOperation('UI', `自动刷新间隔改为 ${this.refreshIntervalLabel(next)}`);
   }
 
   setAutoMultiColumn(isOn: boolean): void {
@@ -359,6 +386,41 @@ struct SettingsPage {
               .border({ width: 1, color: '#24FFFFFF' })
               .clip(true)
 
+              // 自动刷新间隔
+              Row({ space: 12 }) {
+                Column({ space: 4 }) {
+                  Text('自动刷新间隔')
+                    .fontFamily(this.appFontFamily('自动刷新间隔'))
+                    .fontWeight(this.appFontWeight())
+                    .fontSize(15)
+                    .fontColor(Color.White)
+                  Text('首页与信息页数据自动刷新周期，点击切换')
+                    .fontFamily(this.appFontFamily('首页与信息页数据自动刷新周期，点击切换'))
+                    .fontWeight(this.appFontWeight())
+                    .fontSize(12)
+                    .fontColor(MijiaOverviewCardText)
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+                Text(this.refreshIntervalLabel(this.infoRefreshInterval))
+                  .fontFamily(this.appFontFamily(this.refreshIntervalLabel(this.infoRefreshInterval)))
+                  .fontWeight(this.appFontWeight())
+                  .fontSize(14)
+                  .fontColor(MijiaOverviewCardValue)
+                  .padding({ left: 14, right: 14, top: 6, bottom: 6 })
+                  .borderRadius(HwRadius.control)
+                  .backgroundColor('#1AFFFFFF')
+                  .onClick(() => {
+                    this.cycleRefreshInterval();
+                  })
+              }
+              .width('100%')
+              .padding(HwSpace.lg)
+              .borderRadius(HwRadius.card)
+              .backgroundColor(MijiaOverviewCard)
+              .border({ width: 1, color: '#24FFFFFF' })
+              .clip(true)
+
               // 背景与外观（自定义背景、字体等）
               Row({ space: 12 }) {
                 Column({ space: 4 }) {
@@ -523,7 +585,8 @@ struct SettingsPage {
       .width('100%')
       .height(56 + this.statusBarHeight)
       .padding({ left: 16, right: 16, top: this.statusBarHeight })
-      .backgroundColor('#D9FFFFFF')
+      .backgroundColor('#59FFFFFF')
+      .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
     }
     .width('100%')
     .height('100%')

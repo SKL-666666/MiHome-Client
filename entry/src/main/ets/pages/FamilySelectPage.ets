@@ -104,33 +104,12 @@ struct FamilySelectPage {
   }
 
   build() {
-    Stack() {
+    Stack({ alignContent: Alignment.TopStart }) {
       AppBackground()
       Column() {
-        Row() {
-          IconCircleButton({
-          symbol: $r('sys.symbol.chevron_left'),
-          buttonSize: 40,
-          iconSize: 20,
-          onAction: () => {
-            router.back();
-          }
-        })
-        Text('选择家庭')
-          .fontFamily(this.appFontFamily('选择家庭'))
-          .fontWeight(this.appFontWeight())
-          .margin({ left: HwSpace.md })
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(HwColor.textPrimary)
-        Blank()
-      }
-      .width('100%')
-      .height(56 + this.statusBarHeight)
-      .padding({ left: 16, right: 16, top: this.statusBarHeight })
-      .backgroundColor('#FFFFFF')
 
       Column({ space: 14 }) {
+        Blank().height(42 + this.statusBarHeight)
         if (this.loading) {
           Text('加载中…')
             .fontFamily(this.appFontFamily('加载中…'))
@@ -240,6 +219,30 @@ struct FamilySelectPage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.Transparent)
+
+      Row() {
+        IconCircleButton({
+          symbol: $r('sys.symbol.chevron_left'),
+          buttonSize: 40,
+          iconSize: 20,
+          onAction: () => {
+            router.back();
+          }
+        })
+        Text('选择家庭')
+          .fontFamily(this.appFontFamily('选择家庭'))
+          .fontWeight(this.appFontWeight())
+          .margin({ left: HwSpace.md })
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(HwColor.textPrimary)
+        Blank()
+      }
+      .width('100%')
+      .height(56 + this.statusBarHeight)
+      .padding({ left: 16, right: 16, top: this.statusBarHeight })
+      .backgroundColor('#59FFFFFF')
+      .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
     }
     .width('100%')
     .height('100%')
