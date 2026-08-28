@@ -37,8 +37,8 @@ export default class EntryAbility extends UIAbility {
   private mainWindow: window.Window | null = null;
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
     AppSettingsStore.init(this.context);
+    this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
     FeedbackLogService.init(this.context);
     const hideOfflineDevices = AppSettingsStore.getBoolean('hideOfflineDevices', false);
     const selectedHomeId = AppSettingsStore.getString('selectedHomeId', '');
@@ -284,7 +284,13 @@ export default class EntryAbility extends UIAbility {
 
   onConfigurationUpdate(newConfig: Configuration): void {
     // 深色模式为应用内手动开关（设置-外观），不跟随系统；系统配置变化时按持久化值恢复
-    const darkModeEnabled = AppSettingsStore.getBoolean('darkModeEnabled', false);
+    // 本回调会被 setColorMode 同步触发，存储未就绪时按默认值处理，避免进程崩溃
+    let darkModeEnabled = false;
+    try {
+      darkModeEnabled = AppSettingsStore.getBoolean('darkModeEnabled', false);
+    } catch {
+      darkModeEnabled = false;
+    }
     applyAppTheme(darkModeEnabled);
     AppStorage.setOrCreate('isDarkMode', darkModeEnabled);
   }
