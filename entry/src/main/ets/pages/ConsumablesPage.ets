@@ -70,6 +70,7 @@ struct ConsumablesPage {
   @State loading: boolean = true;
   @State refreshing: boolean = false;
   @State errorMessage: string = '';
+  private loadSeq: number = 0;
 
   private topOffset(): number {
     return 56 + this.statusBarHeight;
@@ -92,9 +93,8 @@ struct ConsumablesPage {
   }
 
   private async loadConsumables(): Promise<void> {
-    if (this.loading === false) {
-      this.loading = true;
-    }
+    const seq = ++this.loadSeq;
+    this.loading = true;
     this.errorMessage = '';
     try {
       const homeId = AppSettingsStore.getString('selectedHomeId', '');
@@ -104,6 +104,9 @@ struct ConsumablesPage {
         return;
       }
       const result = await xiaomiDataService.getConsumableItems(homeId);
+      if (seq !== this.loadSeq) {
+        return;
+      }
       const usable: MijiaConsumableItem[] = [];
       for (let i = 0; i < result.length; i++) {
         if (result[i].details.length > 0) {
@@ -113,13 +116,18 @@ struct ConsumablesPage {
       this.items = usable;
       FeedbackLogService.recordOperation('PAGE', `耗材中心: ${usable.length} 台设备有耗材信息`);
     } catch (err) {
+      if (seq !== this.loadSeq) {
+        return;
+      }
       Logger.error('load consumables failed, %{public}s',
         err instanceof Error ? err.message : String(err));
-      this.errorMessage = '耗材信息加载失败，请下拉重试';
+      this.errorMessage = '耗材信息加载失败，下拉刷新或点击右上角重试';
       this.items = [];
     } finally {
-      this.loading = false;
-      this.refreshing = false;
+      if (seq === this.loadSeq) {
+        this.loading = false;
+        this.refreshing = false;
+      }
     }
   }
 
@@ -224,6 +232,7 @@ struct ConsumablesPage {
     Stack({ alignContent: Alignment.TopStart }) {
       AppBackground()
       Column() {
+        Refresh({ refreshing: $$this.refreshing }) {
         Scroll() {
           Column({ space: 0 }) {
             Blank().height(this.topOffset())
@@ -284,6 +293,12 @@ struct ConsumablesPage {
         .align(this.cardsFromTop ? Alignment.Top : Alignment.Center)
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
+        }
+        .width('100%')
+        .height('100%')
+        .onRefreshing(() => {
+          this.handleRefresh();
+        })
       }
       .width('100%')
       .height('100%')

@@ -65,7 +65,6 @@ export struct PropertyControl {
   onChanged: (value: Object) => void = (): void => {
   };
   @State private lastValue: Object | undefined = undefined;
-  @State private userGesture: boolean = false;
   @State private draft: string = '';
   @State private powerPressed: boolean = false;
 
@@ -307,23 +306,14 @@ export struct PropertyControl {
         Text(this.boolOf(this.value) ? '开启' : '关闭')
           .fontFamily(this.appFontFamily(this.boolOf(this.value) ? '开启' : '关闭'))
           .fontWeight(this.appFontWeight())
-          .fontSize(13)
+          .fontSize(14)
           .fontColor(MijiaOverviewCardValue)
         Blank()
         Toggle({ type: ToggleType.Switch, isOn: this.boolOf(this.value) })
           .enabled(this.control.writable)
           .selectedColor(MijiaOnButton)
           .switchPointColor(Color.White)
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.userGesture = true;
-            }
-          })
           .onChange((isOn: boolean) => {
-            if (!this.userGesture) {
-              return;
-            }
-            this.userGesture = false;
             if (isOn === this.boolOf(this.lastValue)) {
               return;
             }
@@ -333,9 +323,6 @@ export struct PropertyControl {
       .width('100%')
       .height(64)
       .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        this.onChanged(!this.boolOf(this.value));
-      })
     }
   }
 
@@ -357,19 +344,10 @@ export struct PropertyControl {
         style: SliderStyle.OutSet
       })
         .enabled(this.control.writable)
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.userGesture = true;
-          }
-        })
         .onChange((value: number, mode: SliderChangeMode) => {
-          if (!this.userGesture) {
-            return;
-          }
           if (mode !== SliderChangeMode.End && mode !== SliderChangeMode.Click) {
             return;
           }
-          this.userGesture = false;
           if (value === this.numberOf(this.lastValue)) {
             return;
           }
@@ -397,19 +375,10 @@ export struct PropertyControl {
         style: SliderStyle.OutSet
       })
         .enabled(this.control.writable)
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.userGesture = true;
-          }
-        })
         .onChange((value: number, mode: SliderChangeMode) => {
-          if (!this.userGesture) {
-            return;
-          }
           if (mode !== SliderChangeMode.End && mode !== SliderChangeMode.Click) {
             return;
           }
-          this.userGesture = false;
           if (value === this.lastDisplayValue()) {
             return;
           }
@@ -451,7 +420,7 @@ export struct PropertyControl {
           .onClick(() => {
             this.onChanged(this.control.optionValues[index ?? 0]);
           })
-      }, (option: string) => option)
+      }, (option: string, index?: number) => `${index ?? 0}_${option}`)
     }
     .width('100%')
   }
@@ -459,9 +428,11 @@ export struct PropertyControl {
   // 文本输入
   @Builder
   compactText() {
-    TextInput({ text: this.draft })
+    TextInput({ text: this.draft, placeholder: '请输入' })
       .enabled(this.control.writable)
       .fontSize(14)
+      .maxLength(200)
+      .enterKeyType(EnterKeyType.Done)
       .onChange((value: string) => {
         this.draft = value;
       })
@@ -511,16 +482,7 @@ export struct PropertyControl {
     if (this.control.type === CapabilityControlType.TOGGLE) {
       Toggle({ type: ToggleType.Switch, isOn: this.boolOf(this.value) })
         .enabled(this.control.writable)
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.userGesture = true;
-          }
-        })
         .onChange((isOn: boolean) => {
-          if (!this.userGesture) {
-            return;
-          }
-          this.userGesture = false;
           if (isOn === this.boolOf(this.lastValue)) {
             return;
           }
@@ -537,19 +499,10 @@ export struct PropertyControl {
         style: SliderStyle.OutSet
       })
         .enabled(this.control.writable)
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.userGesture = true;
-          }
-        })
         .onChange((value: number, mode: SliderChangeMode) => {
-          if (!this.userGesture) {
-            return;
-          }
           if (mode !== SliderChangeMode.End && mode !== SliderChangeMode.Click) {
             return;
           }
-          this.userGesture = false;
           if (value === this.numberOf(this.lastValue)) {
             return;
           }
@@ -585,19 +538,10 @@ export struct PropertyControl {
         })
           .layoutWeight(1)
           .enabled(this.control.writable)
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.userGesture = true;
-            }
-          })
           .onChange((value: number, mode: SliderChangeMode) => {
-            if (!this.userGesture) {
-              return;
-            }
             if (mode !== SliderChangeMode.End && mode !== SliderChangeMode.Click) {
               return;
             }
-            this.userGesture = false;
             if (value === this.lastDisplayValue()) {
               return;
             }
@@ -625,8 +569,10 @@ export struct PropertyControl {
     }
 
     if (this.control.type === CapabilityControlType.TEXT) {
-      TextInput({ text: this.draft })
+      TextInput({ text: this.draft, placeholder: '请输入' })
         .enabled(this.control.writable)
+        .maxLength(200)
+        .enterKeyType(EnterKeyType.Done)
         .onChange((value: string) => {
           this.draft = value;
         })
@@ -677,7 +623,7 @@ export struct PropertyControl {
           }
           .width('48.5%')
           .margin({ bottom: 10 })
-        }, (option: string) => option)
+        }, (option: string, index?: number) => `${index ?? 0}_${option}`)
       }
       .width('100%')
     }

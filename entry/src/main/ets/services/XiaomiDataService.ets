@@ -45,6 +45,8 @@ export class XiaomiDataService {
   private readonly specParser: MIoTSpecParser = new MIoTSpecParser();
   private readonly mijiaSpecClient: MijiaSpecClient = new MijiaSpecClient();
   private readonly eventBus: DeviceEventBus = new DeviceEventBus();
+  private readonly lanTransports: Map<string, LanDeviceTransport> = new Map();
+  private readonly lanSessionSignatures: Map<string, string> = new Map();
 
   async ensureReady(): Promise<void> {
     if (this.mijiaClient !== null && this.mijiaAuth !== null) {
@@ -150,8 +152,20 @@ export class XiaomiDataService {
         keyHex: '',
         ivHex: ''
       };
-      const lanTransport = new LanDeviceTransport();
-      lanTransport.connect(session);
+      const signature = `${device.localIp}:${device.token}`;
+      let lanTransport = this.lanTransports.get(device.did);
+      if (lanTransport !== undefined && this.lanSessionSignatures.get(device.did) !== signature) {
+        await lanTransport.close();
+        lanTransport = undefined;
+      }
+      if (lanTransport === undefined) {
+        lanTransport = new LanDeviceTransport();
+        lanTransport.connect(session);
+        this.lanTransports.set(device.did, lanTransport);
+      } else {
+        lanTransport.connect(session);
+      }
+      this.lanSessionSignatures.set(device.did, signature);
       return new DeviceController(cloudTransport, this.eventBus, lanTransport);
     }
     return new DeviceController(cloudTransport, this.eventBus);
@@ -192,6 +206,15 @@ export class XiaomiDataService {
   async clearSession(): Promise<void> {
     this.mijiaAuth = null;
     this.mijiaClient = null;
+    const transports = Array.from(this.lanTransports.values());
+    this.lanTransports.clear();
+    this.lanSessionSignatures.clear();
+    for (let i = 0; i < transports.length; i++) {
+      try {
+        await transports[i].close();
+      } catch (err) {
+      }
+    }
     await SecureMijiaAuthStorage.clear();
   }
 }

@@ -37,10 +37,12 @@ import { XiaomiDevice } from '../models/XiaomiHomeModels';
 import { xiaomiDataService } from '../services/XiaomiDataService';
 import { FeedbackLogService } from '../services/FeedbackLogService';
 import { Logger } from '../utils/Logger';
-import { HwColor, HwRadius, HwSpace, MijiaOverviewCard, MijiaOverviewCardText, MijiaOverviewCardValue } from '../utils/DesignTokens';
+import { HwColor, HwRadius, HwSpace, MijiaOverviewCard, MijiaOverviewCardPressed, MijiaOverviewCardText, MijiaOverviewCardValue, MijiaSheetBackground } from '../utils/DesignTokens';
 import { AppBackground } from '../components/AppBackground';
 import { IconCircleButton } from '../components/IconCircleButton';
 import { AboutDeviceRouteParam, DeviceDetailRouteParam } from '../models/NavRouteParams';
+import { RoomStore } from '../storage/RoomStore';
+import { DeviceOverrideStore } from '../storage/DeviceOverrideStore';
 
 interface PropertyValueState {
   key: string;
@@ -67,6 +69,12 @@ interface TrendPoint {
 interface TrendCandidate {
   key: string;
   label: string;
+}
+
+/** 管理弹窗中的本地房间选项 */
+interface ManageRoomOption {
+  id: string;
+  title: string;
 }
 
 @Builder
@@ -125,6 +133,13 @@ export struct DeviceDetailPage {
   @State showPowerInfo: boolean = false;
   @State trendPoints: TrendPoint[] = [];
   @State trendTitle: string = '';
+  @State trendGranularity: string = 'day';
+  @State showManageSheet: boolean = false;
+  @State manageName: string = '';
+  @State manageRoomId: string = '';
+  @State manageRooms: ManageRoomOption[] = [];
+  private trendDevice: XiaomiDevice | null = null;
+  private trendSpec: MIoTSpecInstance | null = null;
   @StorageProp('navigationBarHeight') navigationBarHeight: number = 0;
   @StorageProp('statusBarHeight') statusBarHeight: number = 0;
   @StorageProp('isDarkMode') isDarkMode: boolean = false;
@@ -160,7 +175,7 @@ export struct DeviceDetailPage {
         throw new Error('device not found');
       }
       this.device = device;
-      this.deviceName = device.name;
+      this.deviceName = DeviceOverrideStore.getDisplayName(device.did, device.name);
       this.offline = !device.online;
       FeedbackLogService.recordOperation('PAGE',
         `设备详情: ${device.name} did=${device.did} model=${device.model} 在线=${device.online ? '是' : '否'}`);
@@ -199,15 +214,15 @@ export struct DeviceDetailPage {
 
   buildControls(spec: MIoTSpecInstance): PropertyControlDescriptor[] {
     const result: PropertyControlDescriptor[] = [];
-    // 多实例服务（排插多路、多键墙开）先编号（开关1/开关2…）再参与去重，
-    // 编号后各路控件签名不同，不会被当成重复声明误隐藏；
-    // 真正重复声明的同标签 + 同类型 + 同格式控件仍只保留第一个。
+    // 多实例服务（排插多路、多键墙开）先编号（开关1/开关2…）再参与去重；
+    // 去重键为 siid.piid + 类型 + 格式：同一属性重复声明只保留第一个，
+    // 不同属性即使标签相同（如多路开关都叫"开关"）也不会被误隐藏。
     const displayNames = resolveServiceDisplayNames(spec.services);
     const seen = new Set<string>();
     for (let i = 0; i < spec.services.length; i++) {
       const controls = buildServiceControls(spec.services[i], displayNames);
       for (let j = 0; j < controls.length; j++) {
-        const signature = `${controls[j].label}|${controls[j].type}|${controls[j].format}`;
+        const signature = `${controls[j].siid}.${controls[j].piid}|${controls[j].type}|${controls[j].format}`;
         if (seen.has(signature)) {
           continue;
         }
@@ -279,14 +294,10 @@ export struct DeviceDetailPage {
           piid: this.controls[i].piid
         });
       }
-      let results: DevicePropertyResult[] = [];
-      if (params.length > 0) {
-        try {
-          results = await this.controller.getProperties(this.did, params);
-        } catch (err) {
-          results = [];
-        }
+      if (params.length === 0) {
+        return;
       }
+      const results: DevicePropertyResult[] = await this.controller.getProperties(this.did, params);
       const valueMap = new Map<string, Object | undefined>();
       for (let i = 0; i < results.length; i++) {
         valueMap.set(`${results[i].siid}.${results[i].piid}`, results[i].value);
@@ -300,6 +311,9 @@ export struct DeviceDetailPage {
         });
       }
       this.values = newValues;
+    } catch (err) {
+      this.errorMessage = err instanceof Error ? err.message : '刷新属性失败';
+      Logger.error('refresh values failed, %{public}s', this.errorMessage);
     } finally {
       this.refreshing = false;
     }
@@ -326,9 +340,7 @@ export struct DeviceDetailPage {
     try {
       await this.controller.setProperty(this.did, control.siid, control.piid, value);
     } catch (err) {
-      if (previous !== undefined) {
-        this.updateValueState(key, previous);
-      }
+      this.updateValueState(key, previous);
       this.errorMessage = err instanceof Error ? err.message : '设置属性失败';
       Logger.error('set property failed, %{public}s', this.errorMessage);
     }
@@ -441,6 +453,8 @@ export struct DeviceDetailPage {
   }
 
   private async loadTrendInfo(device: XiaomiDevice, spec: MIoTSpecInstance): Promise<void> {
+    this.trendDevice = device;
+    this.trendSpec = spec;
     this.trendPoints = [];
     this.trendTitle = '';
     const candidates = this.findTrendCandidates(spec);
@@ -448,24 +462,58 @@ export struct DeviceDetailPage {
       return;
     }
     const now = Math.floor(Date.now() / 1000);
-    const weekStart = now - 7 * 24 * 3600;
+    let types: string[] = ['stat_day_v3', 'stat_day'];
+    let limit = 7;
+    let start = now - 7 * 24 * 3600;
+    if (this.trendGranularity === 'hour') {
+      types = ['stat_hour_v3', 'stat_hour'];
+      limit = 24;
+      start = now - 24 * 3600;
+    } else if (this.trendGranularity === 'month') {
+      types = ['stat_month_v3', 'stat_month'];
+      limit = 6;
+      start = now - 180 * 24 * 3600;
+    }
     for (let i = 0; i < candidates.length; i++) {
       const keys = this.statisticsKeys(candidates[i].key);
       const items = await this.tryStatistics(
         device.did,
         keys,
-        ['stat_day_v3', 'stat_day'],
-        7,
-        weekStart,
+        types,
+        limit,
+        start,
         now
       );
-      const points = this.parseTrendPoints(items);
+      const points = this.parseTrendPoints(items, this.trendGranularity);
       if (points.length >= 2) {
         this.trendTitle = candidates[i].label;
         this.trendPoints = points;
         break;
       }
     }
+  }
+
+  private trendWindowLabel(): string {
+    if (this.trendGranularity === 'hour') {
+      return '近24小时';
+    }
+    if (this.trendGranularity === 'month') {
+      return '近6个月';
+    }
+    return '近7天';
+  }
+
+  async switchTrendGranularity(mode: string): Promise<void> {
+    if (this.trendGranularity === mode) {
+      return;
+    }
+    this.trendGranularity = mode;
+    const device = this.trendDevice;
+    const spec = this.trendSpec;
+    if (device === null || spec === null) {
+      return;
+    }
+    await this.loadTrendInfo(device, spec);
   }
 
   private findTrendCandidates(spec: MIoTSpecInstance): TrendCandidate[] {
@@ -500,7 +548,7 @@ export struct DeviceDetailPage {
     return result;
   }
 
-  private parseTrendPoints(items: Object[]): TrendPoint[] {
+  private parseTrendPoints(items: Object[], granularity: string): TrendPoint[] {
     const points: TrendPoint[] = [];
     for (let i = 0; i < items.length; i++) {
       const raw = (items[i] as Record<string, Object>)['value'];
@@ -517,14 +565,21 @@ export struct DeviceDetailPage {
       let label = '';
       if (!Number.isNaN(ts) && ts > 0) {
         const date = new Date(ts * 1000);
-        label = `${date.getMonth() + 1}/${date.getDate()}`;
+        if (granularity === 'hour') {
+          label = `${date.getHours()}时`;
+        } else if (granularity === 'month') {
+          label = `${date.getMonth() + 1}月`;
+        } else {
+          label = `${date.getMonth() + 1}/${date.getDate()}`;
+        }
       } else {
         label = `${i + 1}`;
       }
       points.push({ label: label, value: value });
     }
-    if (points.length > 7) {
-      return points.slice(points.length - 7);
+    const limit = granularity === 'hour' ? 24 : (granularity === 'month' ? 6 : 7);
+    if (points.length > limit) {
+      return points.slice(points.length - limit);
     }
     return points;
   }
@@ -660,7 +715,7 @@ export struct DeviceDetailPage {
     return Number.isInteger(sum) ? `${sum}` : sum.toFixed(1);
   }
 
-  updateValueState(key: string, value: Object): void {
+  updateValueState(key: string, value: Object | undefined): void {
     const next: PropertyValueState[] = [];
     for (let i = 0; i < this.values.length; i++) {
       next.push(this.values[i].key === key
@@ -775,7 +830,7 @@ export struct DeviceDetailPage {
       return;
     }
     this.pageInfos.pushPathByName('aboutDevice', new AboutDeviceRouteParam(
-      device.name,
+      DeviceOverrideStore.getDisplayName(device.did, device.name),
       device.manufacturer,
       device.model,
       device.did,
@@ -783,13 +838,222 @@ export struct DeviceDetailPage {
     ));
   }
 
+  private buildManageRoomOptions(): ManageRoomOption[] {
+    const options: ManageRoomOption[] = [];
+    const rooms = RoomStore.loadRooms();
+    for (let i = 0; i < rooms.length; i++) {
+      const room = rooms[i];
+      const title = room.floor.length > 0 ? `${room.floor}楼 ${room.name}` : room.name;
+      options.push({ id: room.id, title: title });
+    }
+    return options;
+  }
+
+  private openManageSheet(): void {
+    const device = this.device;
+    if (device === null) {
+      return;
+    }
+    this.manageName = this.deviceName;
+    this.manageRooms = this.buildManageRoomOptions();
+    this.manageRoomId = '';
+    const rooms = RoomStore.loadRooms();
+    for (let i = 0; i < rooms.length; i++) {
+      if (rooms[i].dids.indexOf(device.did) >= 0) {
+        this.manageRoomId = rooms[i].id;
+        break;
+      }
+    }
+    this.showManageSheet = true;
+  }
+
+  private saveManageSheet(): void {
+    const device = this.device;
+    if (device === null) {
+      this.showManageSheet = false;
+      return;
+    }
+    const trimmed = this.manageName.trim();
+    if (trimmed.length === 0) {
+      this.getUIContext().getPromptAction().showToast({ message: '设备名称不能为空' });
+      return;
+    }
+    DeviceOverrideStore.setNameOverride(device.did, trimmed);
+    this.deviceName = DeviceOverrideStore.getDisplayName(device.did, device.name);
+    let roomChanged = false;
+    const rooms = RoomStore.loadRooms();
+    for (let i = 0; i < rooms.length; i++) {
+      const room = rooms[i];
+      const had = room.dids.indexOf(device.did) >= 0;
+      const should = room.id === this.manageRoomId;
+      if (had === should) {
+        continue;
+      }
+      const nextDids: string[] = [];
+      for (let j = 0; j < room.dids.length; j++) {
+        if (room.dids[j] !== device.did) {
+          nextDids.push(room.dids[j]);
+        }
+      }
+      if (should) {
+        nextDids.push(device.did);
+      }
+      room.dids = nextDids;
+      RoomStore.upsertRoom(room);
+      roomChanged = true;
+    }
+    this.showManageSheet = false;
+    FeedbackLogService.recordOperation('UI',
+      `管理设备 did=${device.did} 改名=${trimmed} 换房=${roomChanged ? '是' : '否'}`);
+    this.getUIContext().getPromptAction().showToast({ message: '已保存设备管理' });
+  }
+
+  @Builder
+  manageSheetBuilder() {
+    Column({ space: 0 }) {
+      Row({ space: 12 }) {
+        Text('管理设备')
+          .fontFamily(this.appFontFamily('管理设备'))
+          .fontWeight(this.appFontWeight())
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(HwColor.textPrimary)
+          .layoutWeight(1)
+        IconCircleButton({
+          symbol: $r('sys.symbol.xmark'),
+          buttonSize: 36,
+          iconSize: 18,
+          onAction: () => {
+            this.showManageSheet = false;
+          }
+        })
+      }
+      .width('100%')
+      .height(56)
+      .alignItems(VerticalAlign.Center)
+      .padding({ left: HwSpace.lg, right: HwSpace.lg })
+
+      Scroll() {
+        Column({ space: 14 }) {
+          Column({ space: 8 }) {
+            Text('设备名称')
+              .fontFamily(this.appFontFamily('设备名称'))
+              .fontWeight(this.appFontWeight())
+              .fontSize(14)
+              .fontColor(MijiaOverviewCardText)
+            TextInput({ text: this.manageName, placeholder: '输入新的设备名称' })
+              .width('100%')
+              .height(44)
+              .fontSize(15)
+              .fontColor(Color.White)
+              .placeholderColor(MijiaOverviewCardText)
+              .backgroundColor(Color.Transparent)
+              .caretColor(MijiaOverviewCardValue)
+              .onChange((value: string) => {
+                this.manageName = value;
+              })
+          }
+          .alignItems(HorizontalAlign.Start)
+          .width('100%')
+          .padding(14)
+          .borderRadius(HwRadius.card)
+          .backgroundColor(MijiaOverviewCard)
+
+          Column({ space: 10 }) {
+            Text('所在房间')
+              .fontFamily(this.appFontFamily('所在房间'))
+              .fontWeight(this.appFontWeight())
+              .fontSize(14)
+              .fontColor(HwColor.textSecondary)
+            if (this.manageRooms.length === 0) {
+              Text('暂无本地房间，可先在「房间管理」中创建')
+                .fontFamily(this.appFontFamily('暂无本地房间，可先在「房间管理」中创建'))
+                .fontWeight(this.appFontWeight())
+                .fontSize(13)
+                .fontColor(HwColor.textSecondary)
+            } else {
+              Flex({ wrap: FlexWrap.Wrap }) {
+                this.manageRoomChip('', '跟随云端')
+                ForEach(this.manageRooms, (room: ManageRoomOption) => {
+                  this.manageRoomChip(room.id, room.title)
+                }, (room: ManageRoomOption) => room.id)
+              }
+            }
+          }
+          .alignItems(HorizontalAlign.Start)
+          .width('100%')
+
+          Button('保存')
+            .width('100%')
+            .height(46)
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .backgroundColor(HwColor.primary)
+            .fontColor(Color.White)
+            .stateEffect(true)
+            .margin({ top: 6 })
+            .onClick(() => {
+              this.saveManageSheet();
+            })
+        }
+        .width('100%')
+        .padding({ left: HwSpace.lg, right: HwSpace.lg, bottom: 24 })
+        .margin({ top: 12 })
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(MijiaSheetBackground)
+  }
+
+  @Builder
+  manageRoomChip(roomId: string, title: string) {
+    Text(title)
+      .fontFamily(this.appFontFamily(title))
+      .fontWeight(this.appFontWeight())
+      .fontSize(13)
+      .fontColor(this.manageRoomId === roomId ? Color.White : HwColor.textPrimary)
+      .height(32)
+      .padding({ left: 14, right: 14 })
+      .borderRadius(16)
+      .backgroundColor(this.manageRoomId === roomId ? HwColor.primary : Color.White)
+      .margin({ right: 8, bottom: 8 })
+      .onClick(() => {
+        this.manageRoomId = roomId;
+      })
+  }
+
+  private trendTitleText(): string {
+    const windowLabel = this.trendWindowLabel();
+    return this.trendTitle.length > 0 ? `${windowLabel}趋势：${this.trendTitle}` : `${windowLabel}趋势`;
+  }
+
+  @Builder
+  trendTab(mode: string, label: string) {
+    Text(label)
+      .fontFamily(this.appFontFamily(label))
+      .fontSize(12)
+      .fontWeight(this.trendGranularity === mode ? FontWeight.Medium : FontWeight.Normal)
+      .fontColor(this.trendGranularity === mode ? HwColor.textPrimary : HwColor.textSecondary)
+      .padding({ left: 12, right: 12, top: 5, bottom: 5 })
+      .borderRadius(14)
+      .backgroundColor(this.trendGranularity === mode ? MijiaOverviewCardPressed : Color.Transparent)
+      .border({ width: 1, color: this.trendGranularity === mode ? Color.Transparent : '#337A8089' })
+      .onClick(() => {
+        this.switchTrendGranularity(mode);
+      })
+  }
+
   @Builder
   trendChart() {
     if (this.trendPoints.length >= 2) {
       Column({ space: 10 }) {
       Row() {
-        Text(this.trendTitle.length > 0 ? `近7天趋势：${this.trendTitle}` : '近7天趋势')
-          .fontFamily(this.appFontFamily(this.trendTitle.length > 0 ? `近7天趋势：${this.trendTitle}` : '近7天趋势'))
+        Text(this.trendTitleText())
+          .fontFamily(this.appFontFamily(this.trendTitleText()))
           .fontWeight(this.appFontWeight())
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
@@ -801,9 +1065,17 @@ export struct DeviceDetailPage {
       .width('100%')
 
       Row({ space: 8 }) {
+        this.trendTab('day', '近7天')
+        this.trendTab('hour', '近24小时')
+        this.trendTab('month', '近6个月')
+        Blank()
+      }
+      .width('100%')
+
+      Row({ space: 8 }) {
         ForEach(this.trendPoints, (point: TrendPoint, index: number) => {
           this.trendBar(point, index)
-        }, (point: TrendPoint, index: number) => `${index}`)
+        }, (point: TrendPoint, index: number) => `${index}:${point.label}:${point.value}`)
       }
       .width('100%')
       .height(120)
@@ -822,13 +1094,15 @@ export struct DeviceDetailPage {
   @Builder
   trendBar(point: TrendPoint, index: number) {
     Column({ space: 4 }) {
-      Text(this.formatTrendValue(point.value))
-        .fontFamily(this.appFontFamily(this.formatTrendValue(point.value)))
-        .fontWeight(this.appFontWeight())
-        .fontSize(9)
-        .fontColor(MijiaOverviewCardText)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
+      if (this.trendPoints.length <= 12) {
+        Text(this.formatTrendValue(point.value))
+          .fontFamily(this.appFontFamily(this.formatTrendValue(point.value)))
+          .fontWeight(this.appFontWeight())
+          .fontSize(9)
+          .fontColor(MijiaOverviewCardText)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
       Column()
         .width('100%')
         .height(this.trendBarHeight(point.value))
@@ -1202,6 +1476,7 @@ export struct DeviceDetailPage {
       Stack({ alignContent: Alignment.TopStart }) {
         AppBackground()
 
+        Refresh({ refreshing: $$this.refreshing }) {
         Scroll(this.scroller) {
           Column({ space: 14 }) {
             Blank().height(this.topOffset())
@@ -1309,7 +1584,13 @@ export struct DeviceDetailPage {
         .height('100%')
         .align(this.cardsFromTop ? Alignment.Top : Alignment.Center)
         .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.Spring)
+        .edgeEffect(EdgeEffect.None)
+        }
+        .width('100%')
+        .height('100%')
+        .onRefreshing(() => {
+          this.refreshValues();
+        })
 
         Row({ space: 10 }) {
           IconCircleButton({
@@ -1327,6 +1608,12 @@ export struct DeviceDetailPage {
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
+          IconCircleButton({
+            symbol: $r('sys.symbol.square_and_pencil'),
+            onAction: () => {
+              this.openManageSheet();
+            }
+          })
           IconCircleButton({
             symbol: $r('sys.symbol.arrow_counterclockwise'),
             buttonEnabled: !this.refreshing,
@@ -1351,6 +1638,12 @@ export struct DeviceDetailPage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.Transparent)
+      .bindSheet($$this.showManageSheet, this.manageSheetBuilder(), {
+        height: SheetSize.MEDIUM,
+        dragBar: true,
+        backgroundColor: MijiaSheetBackground,
+        showClose: false
+      })
     }
     .width('100%')
     .height('100%')

@@ -43,6 +43,10 @@ struct SceneCreatePage {
   @State sceneName: string = '';
   @State actions: LocalSceneAction[] = [];
   @State message: string = '';
+  @State timerEnabled: boolean = false;
+  @State timerSelected: Date = new Date();
+  @State timerDays: boolean[] = [true, true, true, true, true, true, true];
+  private timerDayLabels: string[] = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
   @State devices: XiaomiDevice[] = [];
   @State devicesLoading: boolean = false;
@@ -271,6 +275,20 @@ struct SceneCreatePage {
     this.actions = next;
   }
 
+  private timerDaysMask(): string {
+    let mask = '';
+    for (let i = 0; i < this.timerDays.length; i++) {
+      mask += this.timerDays[i] ? '1' : '0';
+    }
+    return mask;
+  }
+
+  toggleTimerDay(index: number): void {
+    const next: boolean[] = this.timerDays.slice();
+    next[index] = !next[index];
+    this.timerDays = next;
+  }
+
   saveScene(): void {
     const name = this.sceneName.trim();
     if (name.length === 0) {
@@ -281,10 +299,20 @@ struct SceneCreatePage {
       this.message = '请至少添加一个设备动作';
       return;
     }
+    const mask = this.timerDaysMask();
+    if (this.timerEnabled && !mask.includes('1')) {
+      this.message = '定时执行需选择至少一个重复日';
+      return;
+    }
     const scene: LocalScene = {
       sceneId: `${Date.now()}`,
       name: name,
-      actions: this.actions.slice()
+      actions: this.actions.slice(),
+      timerEnabled: this.timerEnabled,
+      timerHour: this.timerSelected.getHours(),
+      timerMinute: this.timerSelected.getMinutes(),
+      timerDays: mask,
+      lastFireDay: ''
     };
     const list = LocalSceneStore.load();
     list.push(scene);
@@ -639,6 +667,85 @@ struct SceneCreatePage {
             backgroundColor: MijiaSheetBackground,
               showClose: false
             })
+
+            Column({ space: 12 }) {
+              Row({ space: 12 }) {
+                SymbolGlyph($r('sys.symbol.moon_fill'))
+                  .fontSize(18)
+                  .fontColor([MijiaOverviewCardValue])
+                Column({ space: 2 }) {
+                  Text('定时执行')
+                    .fontFamily(this.appFontFamily('定时执行'))
+                    .fontWeight(this.appFontWeight())
+                    .fontSize(15)
+                    .fontColor(Color.White)
+                  Text('到达设定时刻后自动执行本智能')
+                    .fontFamily(this.appFontFamily('到达设定时刻后自动执行本智能'))
+                    .fontWeight(this.appFontWeight())
+                    .fontSize(12)
+                    .fontColor(MijiaOverviewCardText)
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+                Toggle({ type: ToggleType.Switch, isOn: this.timerEnabled })
+                  .selectedColor(HwColor.primary)
+                  .onChange((on: boolean) => {
+                    this.timerEnabled = on;
+                  })
+              }
+              .width('100%')
+              .alignItems(VerticalAlign.Center)
+
+              if (this.timerEnabled) {
+                Text('触发时刻')
+                  .fontFamily(this.appFontFamily('触发时刻'))
+                  .fontWeight(this.appFontWeight())
+                  .fontSize(12)
+                  .fontColor(MijiaOverviewCardText)
+                  .width('100%')
+                TimePicker({ selected: this.timerSelected })
+                  .useMilitaryTime(true)
+                  .disappearTextStyle({ color: '#66FFFFFF', font: { size: 13 } })
+                  .textStyle({ color: '#CCFFFFFF', font: { size: 15 } })
+                  .selectedTextStyle({ color: Color.White, font: { size: 19, weight: FontWeight.Medium } })
+                  .height(120)
+                  .width('100%')
+                  .onChange((value: TimePickerResult) => {
+                    const next = new Date();
+                    next.setHours(value.hour, value.minute, 0, 0);
+                    this.timerSelected = next;
+                  })
+                Text('重复日')
+                  .fontFamily(this.appFontFamily('重复日'))
+                  .fontWeight(this.appFontWeight())
+                  .fontSize(12)
+                  .fontColor(MijiaOverviewCardText)
+                  .width('100%')
+                Flex({ wrap: FlexWrap.Wrap }) {
+                  ForEach(this.timerDayLabels, (label: string, index: number) => {
+                    Text(label)
+                      .fontFamily(this.appFontFamily(label))
+                      .fontWeight(this.appFontWeight())
+                      .fontSize(12)
+                      .fontColor(this.timerDays[index] ? Color.White : MijiaOverviewCardText)
+                      .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+                      .borderRadius(14)
+                      .backgroundColor(this.timerDays[index] ? HwColor.primary : '#24FFFFFF')
+                      .margin({ right: 8, bottom: 8 })
+                      .onClick(() => {
+                        this.toggleTimerDay(index);
+                      })
+                  }, (label: string) => label)
+                }
+                .width('100%')
+              }
+            }
+            .width('100%')
+            .padding(HwSpace.lg)
+            .borderRadius(HwRadius.card)
+            .backgroundColor(MijiaOverviewCard)
+            .border({ width: 1, color: '#24FFFFFF' })
+            .clip(true)
 
             if (this.actions.length > 0) {
               Text(`动作（${this.actions.length}）`)

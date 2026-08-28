@@ -246,7 +246,7 @@ struct RoomsPage {
   }
 
   roomTitle(room: UserRoom): string {
-    return `${room.floor}楼 ${room.name}`;
+    return room.floor.length > 0 ? `${room.floor}楼 ${room.name}` : room.name;
   }
 
   roomDeviceCountText(room: UserRoom): string {

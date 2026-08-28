@@ -24,7 +24,7 @@ import { common } from '@kit.AbilityKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { text } from '@kit.ArkGraphics2D';
-import { HwColor, HwRadius, HwSpace, MijiaOverviewCard, MijiaOverviewCardText, MijiaOverviewCardValue } from '../utils/DesignTokens';
+import { HwColor, HwRadius, HwSpace, MijiaOverviewCard, MijiaOverviewCardText, MijiaOverviewCardValue, applyAppTheme } from '../utils/DesignTokens';
 import { loadCustomFonts } from '../utils/CustomFonts';
 import { IconCircleButton } from '../components/IconCircleButton';
 import { AppBackground } from '../components/AppBackground';
@@ -413,6 +413,36 @@ struct AppearanceSettingsPage {
                   .width('100%')
                   .padding({ left: 4, right: 4 })
               }
+
+            Row({ space: 12 }) {
+              Column({ space: 4 }) {
+                Text('深色模式')
+                  .fontFamily(this.appFontFamily('深色模式'))
+                  .fontWeight(this.appFontWeight())
+                  .fontSize(15)
+                  .fontColor(Color.White)
+                Text('开启后应用内使用深色主题，仅应用内生效，不跟随系统')
+                  .fontFamily(this.appFontFamily('开启后应用内使用深色主题，仅应用内生效，不跟随系统'))
+                  .fontWeight(this.appFontWeight())
+                  .fontSize(12)
+                  .fontColor(MijiaOverviewCardText)
+              }
+              .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
+              Toggle({ type: ToggleType.Switch, isOn: this.isDarkMode })
+                .onChange((isOn: boolean) => {
+                  applyAppTheme(isOn);
+                  AppSettingsStore.setBoolean('darkModeEnabled', isOn);
+                  AppStorage.setOrCreate('isDarkMode', isOn);
+                  FeedbackLogService.recordOperation('SETTING', isOn ? '开启深色模式' : '关闭深色模式');
+                })
+            }
+            .width('100%')
+            .padding(HwSpace.lg)
+            .borderRadius(HwRadius.card)
+            .backgroundColor(MijiaOverviewCard)
+            .border({ width: 1, color: '#24FFFFFF' })
+            .clip(true)
 
             Row({ space: 12 }) {
               Column({ space: 4 }) {

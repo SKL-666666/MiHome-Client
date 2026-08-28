@@ -31,20 +31,28 @@ export class LocalSceneStore {
         if (rawActions instanceof Array) {
           for (let j = 0; j < rawActions.length; j++) {
             const ao = rawActions[j] as Record<string, Object>;
+            const valueText = ao['valueText'];
             actions.push({
               did: String(ao['did']),
               deviceName: String(ao['deviceName']),
               siid: Number(ao['siid']),
               piid: Number(ao['piid']),
               label: String(ao['label']),
-              value: ao['value']
+              value: ao['value'],
+              valueText: valueText === undefined ? undefined : String(valueText)
             });
           }
         }
+        const timerDaysValue = String(obj['timerDays'] ?? '');
         scenes.push({
           sceneId: String(obj['sceneId']),
           name: String(obj['name']),
-          actions: actions
+          actions: actions,
+          timerEnabled: obj['timerEnabled'] === true,
+          timerHour: obj['timerHour'] === undefined ? 8 : Number(obj['timerHour']),
+          timerMinute: obj['timerMinute'] === undefined ? 0 : Number(obj['timerMinute']),
+          timerDays: timerDaysValue.length === 7 ? timerDaysValue : '1111111',
+          lastFireDay: String(obj['lastFireDay'] ?? '')
         });
       }
       return scenes;
@@ -64,6 +72,15 @@ export class LocalSceneStore {
       if (scenes[i].sceneId !== sceneId) {
         next.push(scenes[i]);
       }
+    }
+    LocalSceneStore.save(next);
+  }
+
+  static update(scene: LocalScene): void {
+    const scenes = LocalSceneStore.load();
+    const next: LocalScene[] = [];
+    for (let i = 0; i < scenes.length; i++) {
+      next.push(scenes[i].sceneId === scene.sceneId ? scene : scenes[i]);
     }
     LocalSceneStore.save(next);
   }

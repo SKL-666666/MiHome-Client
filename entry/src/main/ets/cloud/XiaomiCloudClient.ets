@@ -440,7 +440,7 @@ export class XiaomiCloudClient {
       'Host': this.host,
       'X-Client-BizId': 'haapi',
       'Content-Type': 'application/json',
-      'Authorization': `Bearer${this.accessToken}`,
+      'Authorization': `Bearer ${this.accessToken}`,
       'X-Client-AppId': this.clientId
     };
   }

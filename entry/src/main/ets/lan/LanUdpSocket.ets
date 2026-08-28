@@ -29,7 +29,9 @@ export class LanUdpSocket {
     if (this.udp !== null) {
       return;
     }
-    this.udp = socket.constructUDPSocketInstance();
+    const udp = socket.constructUDPSocketInstance();
+    await udp.bind({ address: '0.0.0.0', port: 0, family: 1 });
+    this.udp = udp;
   }
 
   async send(address: string, port: number, data: Uint8Array): Promise<void> {
@@ -41,7 +43,7 @@ export class LanUdpSocket {
       family: 1,
       port: port
     };
-    const payload = data.buffer as ArrayBuffer;
+    const payload = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
     await this.udp.send({
       data: payload,
       address: netAddress

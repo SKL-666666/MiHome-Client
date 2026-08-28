@@ -29,6 +29,7 @@ import { xiaomiDataService } from '../services/XiaomiDataService';
 import { FeedbackLogService } from '../services/FeedbackLogService';
 import { AppSettingsStore } from '../storage/AppSettingsStore';
 import { loadCustomFonts } from '../utils/CustomFonts';
+import { applyAppTheme } from '../utils/DesignTokens';
 
 const DOMAIN = 0x0000;
 
@@ -110,6 +111,8 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate('cardsFromTop', cardsFromTop);
     AppStorage.setOrCreate('homeSmoothSwitch', homeSmoothSwitch);
     AppStorage.setOrCreate('customFonts', customFonts);
+    const darkModeEnabled = AppSettingsStore.getBoolean('darkModeEnabled', false);
+    applyAppTheme(darkModeEnabled);
     const fontSizeScaleMode = AppStorage.get<string>('fontSizeMode') as string;
     const fontSizeScaleValue = AppStorage.get<number>('fontSizeValue') as number;
     let fontSizeScale: number = 1;
@@ -131,12 +134,29 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate('is2in1', is2in1);
     AppStorage.setOrCreate('isWearable', isWearable);
     AppStorage.setOrCreate('homeSelectionVersion', 0);
-    // 米家 1:1 浅蓝白风格：固定浅色主题，不跟随系统深色模式
-    AppStorage.setOrCreate('isDarkMode', false);
+    // 深色模式为应用内手动开关（设置-外观），不跟随系统
+    AppStorage.setOrCreate('isDarkMode', darkModeEnabled);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
     FeedbackLogService.recordOperation('SYSTEM', '应用启动 onCreate');
     const notificationService = new DeviceNotificationService(xiaomiDataService.getEventBus());
     notificationService.start();
+    // 冷启动经通知点入时，解析 want 中的设备 did 供首页直达详情
+    this.handleNotificationWant(want);
+  }
+
+  /** 解析通知 wantAgent 携带的设备 did，写入 AppStorage 由首页消费 */
+  private handleNotificationWant(want: Want): void {
+    try {
+      const params = want.parameters;
+      if (params === undefined) {
+        return;
+      }
+      const raw: Object | undefined = params['deviceDid'];
+      if (typeof raw === 'string' && (raw as string).length > 0) {
+        AppStorage.setOrCreate('pendingDeviceDetailDid', raw as string);
+      }
+    } catch (err) {
+    }
   }
 
   onDestroy(): void {
@@ -255,14 +275,18 @@ export default class EntryAbility extends UIAbility {
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onNewWant');
+    // 热启动经通知点入时同样解析设备 did
+    this.handleNotificationWant(want);
     xiaomiOAuthSession.handleCallback(want).catch((err: Error) => {
       hilog.error(DOMAIN, 'testTag', 'oauth callback error, %{public}s', err.message);
     });
   }
 
   onConfigurationUpdate(newConfig: Configuration): void {
-    // 固定浅色主题，不跟随系统深色模式变化
-    AppStorage.setOrCreate('isDarkMode', false);
+    // 深色模式为应用内手动开关（设置-外观），不跟随系统；系统配置变化时按持久化值恢复
+    const darkModeEnabled = AppSettingsStore.getBoolean('darkModeEnabled', false);
+    applyAppTheme(darkModeEnabled);
+    AppStorage.setOrCreate('isDarkMode', darkModeEnabled);
   }
 
   onForeground(): void {

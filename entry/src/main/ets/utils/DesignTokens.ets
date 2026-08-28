@@ -48,7 +48,21 @@ export const MijiaOverviewCardValue: string = '#A9D4FF';
 export const MijiaDarkSubText: string = '#A9B4C4';
 
 /** 弹窗背景：浅蓝灰 */
-export const MijiaSheetBackground: string = '#E3EAF4';
+export let MijiaSheetBackground: string = '#E3EAF4';
+
+/**
+ * 应用主题：把暗/浅色值写入 DesignTokens 的可变 token。
+ * 页面已普遍 @StorageProp('isDarkMode')，翻转该键会触发整页重建，
+ * 重建时读取到的是这里写入的最新值。
+ */
+export function applyAppTheme(isDark: boolean): void {
+  HwColor.background = isDark ? '#1A2D44' : '#DCEAF8';
+  HwColor.surface = isDark ? '#22334F' : '#FFFFFF';
+  HwColor.textPrimary = isDark ? '#EDF1F7' : '#1A1A1A';
+  HwColor.textSecondary = isDark ? '#9BA8BC' : '#7A8089';
+  MijiaSheetBackground = isDark ? '#2A3B58' : '#E3EAF4';
+  HwGlassCardColor.surface = isDark ? '#26364F' : '#E8F0F8';
+}
 
 /** 兼容旧引用（深色主题已回退，保留符号避免遗留编译失败） */
 export const MijiaSkyGradient: string[] = MijiaHeaderGradient;

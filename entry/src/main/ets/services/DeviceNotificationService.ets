@@ -20,6 +20,7 @@
  */
 
 import { notificationManager } from '@kit.NotificationKit';
+import { wantAgent, Want, WantAgent } from '@kit.AbilityKit';
 import {
   DeviceEvent,
   DeviceEventBus,
@@ -27,6 +28,9 @@ import {
 } from '../events/DeviceEventBus';
 import { Logger } from '../utils/Logger';
 import { translateMiotText } from '../components/CapabilityRenderer';
+
+const ENTRY_ABILITY_BUNDLE: string = 'com.miju.client';
+const ENTRY_ABILITY_NAME: string = 'EntryAbility';
 
 export class DeviceNotificationService {
   private readonly eventBus: DeviceEventBus;
@@ -65,11 +69,41 @@ export class DeviceNotificationService {
       }
     };
     this.nextId += 1;
+    // 点击通知直达设备详情：为通知绑定携带 did 的 wantAgent
+    const agent = await this.buildDeviceWantAgent(event.did);
+    if (agent !== null) {
+      request.wantAgent = agent;
+    }
     try {
       await notificationManager.publish(request);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       Logger.error('publish device notification failed, %{public}s', message);
+    }
+  }
+
+  private async buildDeviceWantAgent(did: string): Promise<WantAgent | null> {
+    if (did.length === 0) {
+      return null;
+    }
+    const parameters: Record<string, Object> = { 'deviceDid': did };
+    const target: Want = {
+      bundleName: ENTRY_ABILITY_BUNDLE,
+      abilityName: ENTRY_ABILITY_NAME,
+      parameters: parameters
+    };
+    const info: wantAgent.WantAgentInfo = {
+      wants: [target],
+      operationType: wantAgent.OperationType.START_ABILITY,
+      requestCode: 0,
+      wantAgentFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG]
+    };
+    try {
+      return await wantAgent.getWantAgent(info);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      Logger.error('build device want agent failed, %{public}s', message);
+      return null;
     }
   }
 

@@ -89,6 +89,8 @@ export interface XiaomiScene {
   icon: string;
   isEnabled: boolean;
   homeId: string;
+  /** 场景来源：manual=手动执行，auto=自动化 */
+  type: string;
 }
 
 /** 本地智能中的单条设备动作 */
@@ -108,16 +110,26 @@ export interface LocalScene {
   sceneId: string;
   name: string;
   actions: LocalSceneAction[];
+  /** 定时执行开关 */
+  timerEnabled: boolean;
+  /** 定时触发时刻（24 小时制） */
+  timerHour: number;
+  timerMinute: number;
+  /** 重复日掩码，7 位字符（下标 0=周一 … 6=周日），'1' 表示当日触发 */
+  timerDays: string;
+  /** 最近一次已触发日期（YYYY-MM-DD），防止同日重复触发 */
+  lastFireDay: string;
 }
 
-export function parseXiaomiScene(raw: Record<string, Object>): XiaomiScene {
+export function parseXiaomiScene(raw: Record<string, Object>, sceneType: string): XiaomiScene {
   const enableRaw = asString(raw['enable'] ?? raw['is_enable'] ?? raw['enabled']);
   return {
     sceneId: asString(raw['scene_id'] ?? raw['id'] ?? raw['us_id']),
     name: asString(raw['name']),
     icon: asString(raw['icon'] ?? raw['icon_url']),
     isEnabled: enableRaw === '1' || enableRaw === 'true' || enableRaw === 'True',
-    homeId: asString(raw['home_id'])
+    homeId: asString(raw['home_id']),
+    type: sceneType
   };
 }
 

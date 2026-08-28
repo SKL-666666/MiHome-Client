@@ -450,13 +450,13 @@ export class MijiaApiClient {
       '/appgateway/miot/appsceneservice/AppSceneService/GetSimpleSceneList', data);
     const scenes: XiaomiScene[] = [];
     const seenSceneIds: string[] = [];
-    const appendSceneList = (value: Object | undefined): void => {
+    const appendSceneList = (value: Object | undefined, sceneType: string): void => {
       if (!(value instanceof Array)) {
         return;
       }
       for (let i = 0; i < value.length; i++) {
         const raw = value[i] as Record<string, Object>;
-        const scene = parseXiaomiScene(raw);
+        const scene = parseXiaomiScene(raw, sceneType);
         if (scene.sceneId.length === 0 || seenSceneIds.indexOf(scene.sceneId) >= 0) {
           continue;
         }
@@ -465,8 +465,8 @@ export class MijiaApiClient {
         scenes.push(scene);
       }
     };
-    appendSceneList(result['manual_scene_info_list']);
-    appendSceneList(result['auto_scene_info_list']);
+    appendSceneList(result['manual_scene_info_list'], 'manual');
+    appendSceneList(result['auto_scene_info_list'], 'auto');
     return scenes;
   }
 

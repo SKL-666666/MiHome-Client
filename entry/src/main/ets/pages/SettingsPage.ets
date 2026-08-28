@@ -20,7 +20,8 @@
  */
 
 import { router } from '@kit.ArkUI';
-import { HwColor, HwRadius, HwSpace, MijiaOverviewCard, MijiaOverviewCardText, MijiaOverviewCardValue } from '../utils/DesignTokens';
+import { deviceInfo } from '@kit.BasicServicesKit';
+import { HwColor, HwRadius, HwSpace, MijiaOverviewCard, MijiaOverviewCardText, MijiaOverviewCardValue, applyAppTheme } from '../utils/DesignTokens';
 import { IconCircleButton } from '../components/IconCircleButton';
 import { AppBackground } from '../components/AppBackground';
 import { AppSettingsStore } from '../storage/AppSettingsStore';
@@ -106,6 +107,18 @@ struct SettingsPage {
     AppSettingsStore.delete('backgroundImage');
     AppSettingsStore.delete('defaultHomeTab');
     AppSettingsStore.delete('infoRefreshInterval');
+    AppSettingsStore.delete('fontMode');
+    AppSettingsStore.delete('fontFamilyEn');
+    AppSettingsStore.delete('fontFamilyZh');
+    AppSettingsStore.delete('fontSizeMode');
+    AppSettingsStore.delete('fontSizeValue');
+    AppSettingsStore.delete('fontWeightMode');
+    AppSettingsStore.delete('fontWeightValue');
+    AppSettingsStore.delete('immersiveLightEnabled');
+    AppSettingsStore.delete('cardsFromTop');
+    AppSettingsStore.delete('homeSmoothSwitch');
+    AppSettingsStore.delete('pcLayoutEnabled');
+    AppSettingsStore.delete('darkModeEnabled');
     AppStorage.setOrCreate('hideOfflineDevices', false);
     AppStorage.setOrCreate('selectedHomeId', '');
     AppStorage.setOrCreate('selectedHomeName', '');
@@ -119,6 +132,20 @@ struct SettingsPage {
     AppStorage.setOrCreate('backgroundImage', '');
     AppStorage.setOrCreate('defaultHomeTab', 'home');
     AppStorage.setOrCreate('infoRefreshInterval', '30');
+    AppStorage.setOrCreate('fontMode', 'system');
+    AppStorage.setOrCreate('fontFamilyEn', 'system');
+    AppStorage.setOrCreate('fontFamilyZh', 'system');
+    AppStorage.setOrCreate('fontSizeMode', 'system');
+    AppStorage.setOrCreate('fontSizeValue', 16);
+    AppStorage.setOrCreate('fontWeightMode', 'system');
+    AppStorage.setOrCreate('fontWeightValue', 400);
+    AppStorage.setOrCreate('immersiveLightEnabled', true);
+    AppStorage.setOrCreate('cardsFromTop', true);
+    AppStorage.setOrCreate('homeSmoothSwitch', false);
+    AppStorage.setOrCreate('pcLayoutEnabled', deviceInfo.deviceType === '2in1');
+    AppStorage.setOrCreate('darkModeEnabled', false);
+    applyAppTheme(false);
+    AppStorage.setOrCreate('isDarkMode', false);
     this.hideOfflineDevices = false;
     this.dualColumnMode = false;
     this.autoMultiColumn = false;
