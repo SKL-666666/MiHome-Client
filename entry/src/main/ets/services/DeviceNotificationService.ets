@@ -117,7 +117,8 @@ export class DeviceNotificationService {
     if (event.type === 'action_result') {
       return '设备动作已完成';
     }
-    const payload = event.payload as Record<string, Object>;
+    // payload 类型上非空，但运行时可能传入 null/undefined，判空避免异步方法内未处理异常
+    const payload = (event.payload ?? {}) as Record<string, Object>;
     const name = payload['name'] ?? payload['description'] ?? '设备事件';
     return translateMiotText(String(name));
   }
