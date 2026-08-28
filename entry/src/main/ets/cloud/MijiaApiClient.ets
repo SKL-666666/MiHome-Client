@@ -291,6 +291,153 @@ export class MijiaApiClient {
     return this.request('/v2/message/v2/check_new_msg', data);
   }
 
+  async getMessageList(homeId: string, limit: number = 30): Promise<MijiaMessageItem[]> {
+    const endAt = Math.floor(Date.now() / 1000);
+    const data: MijiaMessageListRequest = {
+      begin_at: endAt - 7 * 24 * 3600,
+      end_at: endAt,
+      home_id: Number(homeId),
+      limit: limit,
+      page_id: 0,
+      stick: false
+    };
+    const result = await this.request('/v2/message/v2/list', data);
+    const groupsRaw = result['groups'] instanceof Array
+      ? result['groups'] as Object[]
+      : (result['messages'] instanceof Array ? result['messages'] as Object[] : []);
+    const items: MijiaMessageItem[] = [];
+    for (let i = 0; i < groupsRaw.length; i++) {
+      const group = groupsRaw[i];
+      if (!(group instanceof Object) || group instanceof Array) {
+        continue;
+      }
+      const listRaw = (group as Record<string, Object>)['list'];
+      if (!(listRaw instanceof Array)) {
+        continue;
+      }
+      for (let j = 0; j < listRaw.length; j++) {
+        const raw: Object = listRaw[j];
+        if (!(raw instanceof Object) || raw instanceof Array) {
+          continue;
+        }
+        const entry = raw as Record<string, Object>;
+        let title = '';
+        let desc = '';
+        const contentRaw = entry['content'];
+        let contentObj: Record<string, Object> | null = null;
+        if (typeof contentRaw === 'string') {
+          try {
+            const parsed: Object = JSON.parse(contentRaw);
+            if (parsed instanceof Object && !(parsed instanceof Array)) {
+              contentObj = parsed as Record<string, Object>;
+            }
+          } catch (err) {
+            contentObj = null;
+          }
+        } else if (contentRaw instanceof Object && !(contentRaw instanceof Array)) {
+          contentObj = contentRaw as Record<string, Object>;
+        }
+        if (contentObj !== null) {
+          title = asString(contentObj['title']);
+          desc = asString(contentObj['desc']).length > 0
+            ? asString(contentObj['desc']) : asString(contentObj['content']);
+        }
+        const dataRaw = entry['data'];
+        if (title.length === 0 && typeof dataRaw === 'string') {
+          try {
+            const parsed: Object = JSON.parse(dataRaw);
+            if (parsed instanceof Object && !(parsed instanceof Array)) {
+              const dataObj = parsed as Record<string, Object>;
+              title = asString(dataObj['title']);
+              desc = desc.length > 0 ? desc : asString(dataObj['desc']);
+            }
+          } catch (err) {
+            title = '';
+          }
+        }
+        const timeVal = entry['time'];
+        const createTime = entry['create_time'];
+        const time = typeof timeVal === 'number' ? timeVal
+          : (typeof createTime === 'number' ? createTime : 0);
+        if (title.length === 0 && desc.length === 0) {
+          continue;
+        }
+        items.push({
+          messageId: asString(entry['id']),
+          title: title.length > 0 ? title : desc,
+          desc: title.length > 0 ? desc : '',
+          time: time,
+          model: asString(entry['model']),
+          did: asString(entry['did'])
+        });
+      }
+    }
+    return items;
+  }
+
+  async getConsumableItems(homeId: string, ownerId: string): Promise<MijiaConsumableItem[]> {
+    const data: MijiaConsumableItemsRequest = {
+      home_id: Number(homeId),
+      owner_id: Number(ownerId),
+      filter_ignore: true
+    };
+    const result = await this.request('/v2/home/standard_consumable_items', data);
+    const groupsRaw = result['items'];
+    if (!(groupsRaw instanceof Array)) {
+      return [];
+    }
+    const items: MijiaConsumableItem[] = [];
+    const seenDids: string[] = [];
+    for (let g = 0; g < groupsRaw.length; g++) {
+      const groupRaw: Object = groupsRaw[g];
+      if (!(groupRaw instanceof Object) || groupRaw instanceof Array) {
+        continue;
+      }
+      const group = groupRaw as Record<string, Object>;
+      const consumesRaw = group['consumes_data'];
+      if (!(consumesRaw instanceof Array)) {
+        continue;
+      }
+      for (let i = 0; i < consumesRaw.length; i++) {
+        this.appendConsumableEntry(consumesRaw[i] as Object, items, seenDids);
+      }
+    }
+    return items;
+  }
+
+  private appendConsumableEntry(raw: Object, items: MijiaConsumableItem[], seenDids: string[]): void {
+    if (!(raw instanceof Object) || raw instanceof Array) {
+      return;
+    }
+    const entry = raw as Record<string, Object>;
+    const did = asString(entry['did']);
+    if (did.length > 0 && seenDids.indexOf(did) >= 0) {
+      return;
+    }
+    const detailEntries: Record<string, Object>[] = [];
+    const detailsRaw = entry['details'];
+    if (detailsRaw instanceof Array) {
+      for (let j = 0; j < detailsRaw.length; j++) {
+        const detail: Object = detailsRaw[j];
+        if (detail instanceof Object && !(detail instanceof Array)) {
+          detailEntries.push(detail as Record<string, Object>);
+        }
+      }
+    } else if (detailsRaw instanceof Object) {
+      detailEntries.push(detailsRaw as Record<string, Object>);
+    }
+    const details = parseConsumableDetails(detailEntries);
+    if (did.length > 0) {
+      seenDids.push(did);
+    }
+    items.push({
+      did: did,
+      name: asString(entry['name']),
+      model: asString(entry['model']),
+      details: details
+    });
+  }
+
   async getScenes(homeId: string): Promise<XiaomiScene[]> {
     const ownerUid = await this.getHomeOwner(homeId);
     const data: MijiaSceneListRequest = {
@@ -334,7 +481,7 @@ export class MijiaApiClient {
     return this.request('/appgateway/miot/appsceneservice/AppSceneService/NewRunScene', data);
   }
 
-  private async getHomeOwner(homeId: string): Promise<string> {
+  async getHomeOwner(homeId: string): Promise<string> {
     const homes = await this.getHomes();
     for (let i = 0; i < homes.length; i++) {
       if (homes[i].homeId === homeId) {
@@ -444,6 +591,104 @@ interface MijiaActionRequest {
 
 interface MijiaCheckNewMsgRequest {
   begin_at: number;
+}
+
+interface MijiaMessageListRequest {
+  begin_at: number;
+  end_at: number;
+  home_id: number;
+  limit: number;
+  page_id: number;
+  stick: boolean;
+}
+
+export interface MijiaMessageItem {
+  messageId: string;
+  title: string;
+  desc: string;
+  time: number;
+  model: string;
+  did: string;
+}
+
+interface MijiaConsumableItemsRequest {
+  home_id: number;
+  owner_id: number;
+  filter_ignore: boolean;
+}
+
+export interface MijiaConsumableDetail {
+  name: string;
+  percent: number;
+  remainText: string;
+}
+
+export interface MijiaConsumableItem {
+  did: string;
+  name: string;
+  model: string;
+  details: MijiaConsumableDetail[];
+}
+
+function parseConsumableDetailName(obj: Record<string, Object>): string {
+  const description = asString(obj['description']);
+  if (description.length > 0) {
+    return description;
+  }
+  const consumableType = asString(obj['consumable_type']);
+  if (consumableType.length > 0) {
+    return consumableType;
+  }
+  const typeName = asString(obj['type_name']);
+  if (typeName.length > 0) {
+    return typeName;
+  }
+  return asString(obj['name']);
+}
+
+function parseConsumableNumber(raw: Object | undefined): number {
+  if (typeof raw === 'number') {
+    return raw;
+  }
+  if (typeof raw === 'string' && raw.length > 0) {
+    const parsed = Number(raw);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return -1;
+}
+
+function parseConsumableDetails(entries: Record<string, Object>[]): MijiaConsumableDetail[] {
+  const results: MijiaConsumableDetail[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const obj = entries[i];
+    const name = parseConsumableDetailName(obj);
+    if (name.length === 0) {
+      continue;
+    }
+    let percent = parseConsumableNumber(obj['value']);
+    if (percent < 0) {
+      const percentRaw = obj['left_percent'] !== undefined ? obj['left_percent'] : obj['percent'];
+      if (typeof percentRaw === 'number') {
+        percent = percentRaw;
+      }
+    }
+    let remainText = '';
+    const leftHours = parseConsumableNumber(obj['left_time']);
+    const leftDayRaw = obj['left_day'];
+    if (leftHours > 0) {
+      remainText = `剩余约 ${Math.max(1, Math.round(leftHours / 24))} 天`;
+    } else if (typeof leftDayRaw === 'number' && leftDayRaw > 0) {
+      remainText = `剩余约 ${leftDayRaw} 天`;
+    }
+    results.push({
+      name: name,
+      percent: percent,
+      remainText: remainText
+    });
+  }
+  return results;
 }
 
 interface MijiaSceneListRequest {

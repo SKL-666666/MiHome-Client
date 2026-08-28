@@ -33,16 +33,15 @@ export const DEFAULT_OAUTH2_API_HOST: string = 'ha.api.io.mi.com';
 export const DEFAULT_CLOUD_SERVER: string = 'cn';
 
 /**
- * Registered in the upstream Home Assistant integration. It is NOT verified
- * for this standalone app. Do not treat it as a working native-app redirect.
+ * Registered in the upstream Home Assistant integration and accepted by the
+ * Xiaomi authorize page for client_id 2882303761520251711. The app only uses
+ * it to pass the authorize page validation; the actual mijia cloud login
+ * relies on the web session cookie (userId + passToken) captured in the
+ * in-app browser, not on this redirect being reachable.
  */
 export const SOURCE_OAUTH_REDIRECT_URL: string = 'http://homeassistant.local:8123';
 
-/**
- * UNVERIFIED: a standalone HarmonyOS app must register its own OAuth client
- * and redirect URI with Xiaomi before this URI can work.
- */
-export const APP_OAUTH_REDIRECT_URI: string = 'xiaomihome://oauth/callback';
+export const APP_OAUTH_REDIRECT_URI: string = SOURCE_OAUTH_REDIRECT_URL;
 
 export const TOKEN_EXPIRES_TS_RATIO: number = 0.7;
 export const DEFAULT_HTTP_TIMEOUT_MS: number = 30000;

@@ -26,10 +26,9 @@ import {
   buildServiceActions,
   buildServiceControls,
   CapabilityControlType,
-  PropertyControlDescriptor
+  PropertyControlDescriptor,
+  resolveServiceDisplayNames
 } from '../components/CapabilityRenderer';
-import { ActionControl } from '../components/ActionControl';
-import { ActionArgumentControl } from '../components/ActionArgumentControl';
 import { PropertyControl } from '../components/PropertyControl';
 import { DeviceController } from '../controllers/DeviceController';
 import { DevicePropertyParam, DevicePropertyResult } from '../controllers/DeviceTransport';
@@ -115,6 +114,7 @@ export struct DeviceDetailPage {
   @State values: PropertyValueState[] = [];
   @State loading: boolean = true;
   @State refreshing: boolean = false;
+  @State activeTab: string = 'status';
   @State offline: boolean = false;
   @State errorMessage: string = '';
   @State actionLoadingKey: string = '';
@@ -170,7 +170,7 @@ export struct DeviceDetailPage {
         this.actions = this.buildActions(spec);
         this.buildValueStates(this.controls);
         this.buildActionArgumentStates(this.actions);
-        this.controller = await xiaomiDataService.getDeviceController();
+        this.controller = await xiaomiDataService.getDeviceController(device);
         await this.refreshValues();
         this.recordDeviceValues();
         await this.loadPowerInfo(device, spec);
@@ -199,11 +199,13 @@ export struct DeviceDetailPage {
 
   buildControls(spec: MIoTSpecInstance): PropertyControlDescriptor[] {
     const result: PropertyControlDescriptor[] = [];
-    // 去重：同标签 + 同类型 + 同格式的重复控件（设备 spec 常重复声明同一开关），
-    // 只保留第一个，保证“有多少功能就显示多少按钮”，避免多个相同的“开关”。
+    // 多实例服务（排插多路、多键墙开）先编号（开关1/开关2…）再参与去重，
+    // 编号后各路控件签名不同，不会被当成重复声明误隐藏；
+    // 真正重复声明的同标签 + 同类型 + 同格式控件仍只保留第一个。
+    const displayNames = resolveServiceDisplayNames(spec.services);
     const seen = new Set<string>();
     for (let i = 0; i < spec.services.length; i++) {
-      const controls = buildServiceControls(spec.services[i]);
+      const controls = buildServiceControls(spec.services[i], displayNames);
       for (let j = 0; j < controls.length; j++) {
         const signature = `${controls[j].label}|${controls[j].type}|${controls[j].format}`;
         if (seen.has(signature)) {
@@ -218,8 +220,9 @@ export struct DeviceDetailPage {
 
   buildActions(spec: MIoTSpecInstance): ActionControlDescriptor[] {
     const result: ActionControlDescriptor[] = [];
+    const displayNames = resolveServiceDisplayNames(spec.services);
     for (let i = 0; i < spec.services.length; i++) {
-      const actions = buildServiceActions(spec.services[i]);
+      const actions = buildServiceActions(spec.services[i], displayNames);
       for (let j = 0; j < actions.length; j++) {
         result.push(actions[j]);
       }
@@ -243,9 +246,16 @@ export struct DeviceDetailPage {
     for (let i = 0; i < actions.length; i++) {
       const args = actions[i].arguments;
       for (let j = 0; j < args.length; j++) {
+        const arg = args[j];
+        let defaultValue: Object | undefined = undefined;
+        if (arg.format === 'bool') {
+          defaultValue = false;
+        } else if (arg.options.length > 0 && arg.optionValues.length > 0) {
+          defaultValue = arg.optionValues[0];
+        }
         states.push({
-          key: `${actions[i].siid}.${actions[i].aiid}.${args[j].piid}`,
-          value: undefined
+          key: `${actions[i].siid}.${actions[i].aiid}.${arg.piid}`,
+          value: defaultValue
         });
       }
     }
@@ -329,12 +339,19 @@ export struct DeviceDetailPage {
       this.errorMessage = '设备离线';
       return;
     }
+    const missing = this.firstMissingArgument(action);
+    if (missing !== null) {
+      this.errorMessage = `请先设置参数「${missing.label}」`;
+      return;
+    }
     const key = `${action.siid}.${action.aiid}`;
     this.actionLoadingKey = key;
     try {
       const inList: Object[] = [];
       for (let i = 0; i < action.argumentPiids.length; i++) {
-        inList.push(this.getActionArgumentValue(action, action.argumentPiids[i]) ?? '');
+        const piid = action.argumentPiids[i];
+        const arg = this.findArgument(action, piid);
+        inList.push(this.coerceArgumentValue(arg, this.getActionArgumentValue(action, piid)));
       }
       await this.controller.callAction(this.did, action.siid, action.aiid, inList);
     } catch (err) {
@@ -674,6 +691,84 @@ export struct DeviceDetailPage {
     this.actionArgumentValues = next;
   }
 
+  private boolOf(input: Object | undefined): boolean {
+    return input === true || input === 1 || input === 'true' || input === '1';
+  }
+
+  private optionIndexOf(arg: ActionArgumentDescriptor, value: Object | undefined): number {
+    for (let i = 0; i < arg.optionValues.length; i++) {
+      if (arg.optionValues[i] === value) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private argumentInputText(action: ActionControlDescriptor, arg: ActionArgumentDescriptor): string {
+    return String(this.getActionArgumentValue(action, arg.piid) ?? '');
+  }
+
+  private argumentValueText(arg: ActionArgumentDescriptor, value: Object | undefined): string {
+    if (arg.format === 'bool') {
+      return this.boolOf(value) ? '开' : '关';
+    }
+    const optionIndex = this.optionIndexOf(arg, value);
+    if (optionIndex >= 0) {
+      return arg.options[optionIndex];
+    }
+    const text = String(value ?? '');
+    return text.length > 0 ? text : '未设置';
+  }
+
+  private actionSummary(action: ActionControlDescriptor): string {
+    if (action.arguments.length === 0) {
+      return '点击右上角执行';
+    }
+    const parts: string[] = [];
+    for (let i = 0; i < action.arguments.length; i++) {
+      const arg = action.arguments[i];
+      parts.push(`${arg.label}：${this.argumentValueText(arg, this.getActionArgumentValue(action, arg.piid))}`);
+    }
+    return `参数 · ${parts.join('，')}`;
+  }
+
+  private findArgument(action: ActionControlDescriptor, piid: number): ActionArgumentDescriptor | null {
+    for (let i = 0; i < action.arguments.length; i++) {
+      if (action.arguments[i].piid === piid) {
+        return action.arguments[i];
+      }
+    }
+    return null;
+  }
+
+  private firstMissingArgument(action: ActionControlDescriptor): ActionArgumentDescriptor | null {
+    for (let i = 0; i < action.arguments.length; i++) {
+      const arg = action.arguments[i];
+      if (arg.format === 'bool') {
+        continue;
+      }
+      const value = this.getActionArgumentValue(action, arg.piid);
+      if (value === undefined || value === null) {
+        return arg;
+      }
+      if (typeof value === 'string' && value.trim().length === 0) {
+        return arg;
+      }
+    }
+    return null;
+  }
+
+  private coerceArgumentValue(arg: ActionArgumentDescriptor | null, value: Object | undefined): Object {
+    if (arg !== null && typeof value === 'string' && (arg.format === 'int' || arg.format === 'float')) {
+      const text = value.trim();
+      if (/^-?\d+(\.\d+)?$/.test(text)) {
+        const num = Number(text);
+        return arg.format === 'int' ? Math.round(num) : num;
+      }
+    }
+    return value ?? '';
+  }
+
   openAboutDevice(): void {
     const device = this.device;
     if (device === null) {
@@ -917,6 +1012,191 @@ export struct DeviceDetailPage {
     return count;
   }
 
+  // 实时状态 / 动作 页签：标题即开关，点击切换下方卡片，默认展示实时状态。
+  @Builder
+  tabPill(tab: string, label: string) {
+    Text(label)
+      .fontFamily(this.appFontFamily(label))
+      .fontWeight(this.appFontWeight())
+      .fontSize(16)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(this.activeTab === tab ? Color.White : HwColor.textPrimary)
+      .padding({ left: 26, right: 26, top: 10, bottom: 10 })
+      .borderRadius(HwRadius.control)
+      .backgroundColor(this.activeTab === tab ? HwColor.primary : '#14000000')
+      .onClick(() => {
+        if (this.activeTab !== tab) {
+          this.activeTab = tab;
+          this.scroller.scrollTo({
+            xOffset: 0,
+            yOffset: 0,
+            animation: { duration: 200, curve: Curve.EaseOut }
+          });
+        }
+      })
+  }
+
+  // 动作区：仅在「动作」页签下展示，集中收纳设备 spec 声明的动作（aiid）。
+  @Builder
+  advancedActionsSection() {
+    Column({ space: 12 }) {
+      ForEach(this.actions, (action: ActionControlDescriptor) => {
+        this.actionItem(action)
+      }, (action: ActionControlDescriptor) => `${action.siid}.${action.aiid}`)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  // 单个动作：标题 + 实时参数摘要 + 参数控件 + 执行按钮合并为一张自解释卡片
+  @Builder
+  actionItem(action: ActionControlDescriptor) {
+    Column({ space: 12 }) {
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.bolt'))
+          .fontSize(18)
+          .fontColor([HwColor.primary])
+        Column({ space: 3 }) {
+          Text(action.label)
+            .fontFamily(this.appFontFamily(action.label))
+            .fontWeight(this.appFontWeight())
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(MijiaOverviewCardText)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.actionSummary(action))
+            .fontFamily(this.appFontFamily(this.actionSummary(action)))
+            .fontWeight(this.appFontWeight())
+            .fontSize(12)
+            .fontColor(MijiaOverviewCardText)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        this.actionExecuteButton(action)
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      ForEach(action.arguments, (arg: ActionArgumentDescriptor) => {
+        this.actionArgumentEditor(action, arg)
+      }, (arg: ActionArgumentDescriptor) => `${arg.piid}`)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .padding(HwSpace.md)
+    .borderRadius(HwRadius.card)
+    .backgroundColor(MijiaOverviewCard)
+    .border({ width: 1, color: '#24FFFFFF' })
+    .clip(true)
+  }
+
+  @Builder
+  actionExecuteButton(action: ActionControlDescriptor) {
+    Row({ space: 5 }) {
+      if (this.actionLoadingKey === `${action.siid}.${action.aiid}`) {
+        LoadingProgress()
+          .width(14)
+          .height(14)
+          .color(Color.White)
+        Text('执行中')
+          .fontFamily(this.appFontFamily('执行中'))
+          .fontWeight(this.appFontWeight())
+          .fontSize(13)
+          .fontColor(Color.White)
+      } else {
+        SymbolGlyph($r('sys.symbol.bolt'))
+          .fontSize(13)
+          .fontColor([Color.White])
+        Text('执行')
+          .fontFamily(this.appFontFamily('执行'))
+          .fontWeight(this.appFontWeight())
+          .fontSize(13)
+          .fontColor(Color.White)
+      }
+    }
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+    .borderRadius(HwRadius.control)
+    .backgroundColor(HwColor.primary)
+    .onClick(() => {
+      this.callAction(action);
+    })
+  }
+
+  // 参数行：标明参数名与当前值；bool 为开关、枚举为选项、其它为输入框
+  @Builder
+  actionArgumentEditor(action: ActionControlDescriptor, arg: ActionArgumentDescriptor) {
+    if (arg.format === 'bool') {
+      Row({ space: 10 }) {
+        Text(arg.label)
+          .fontFamily(this.appFontFamily(arg.label))
+          .fontWeight(this.appFontWeight())
+          .fontSize(13)
+          .fontColor(MijiaOverviewCardText)
+          .layoutWeight(1)
+        Text(this.boolOf(this.getActionArgumentValue(action, arg.piid)) ? '开' : '关')
+          .fontFamily(this.appFontFamily('开'))
+          .fontWeight(this.appFontWeight())
+          .fontSize(13)
+          .fontColor(MijiaOverviewCardValue)
+        Toggle({ type: ToggleType.Switch, isOn: this.boolOf(this.getActionArgumentValue(action, arg.piid)) })
+          .selectedColor(HwColor.primary)
+          .onChange((isOn: boolean) => {
+            this.updateActionArgumentValue(action, arg.piid, isOn);
+          })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+    } else if (arg.options.length > 0) {
+      Text(arg.label)
+        .fontFamily(this.appFontFamily(arg.label))
+        .fontWeight(this.appFontWeight())
+        .fontSize(13)
+        .fontColor(MijiaOverviewCardText)
+      Flex({ wrap: FlexWrap.Wrap }) {
+        ForEach(arg.options, (option: string, index?: number) => {
+          Text(option)
+            .fontFamily(this.appFontFamily(option))
+            .fontWeight(this.appFontWeight())
+            .fontSize(13)
+            .fontColor(this.optionIndexOf(arg, this.getActionArgumentValue(action, arg.piid)) === (index ?? -1)
+              ? MijiaOverviewCardValue : MijiaOverviewCardText)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+            .borderRadius(HwRadius.control)
+            .backgroundColor(this.optionIndexOf(arg, this.getActionArgumentValue(action, arg.piid)) === (index ?? -1)
+              ? '#263379B7' : '#1A000000')
+            .border({
+              width: 1,
+              color: this.optionIndexOf(arg, this.getActionArgumentValue(action, arg.piid)) === (index ?? -1)
+                ? MijiaOverviewCardValue : '#24FFFFFF'
+            })
+            .margin({ right: 8, bottom: 8 })
+            .onClick(() => {
+              this.updateActionArgumentValue(action, arg.piid, arg.optionValues[index ?? 0]);
+            })
+        }, (option: string) => option)
+      }
+      .width('100%')
+    } else {
+      Text(arg.label)
+        .fontFamily(this.appFontFamily(arg.label))
+        .fontWeight(this.appFontWeight())
+        .fontSize(13)
+        .fontColor(MijiaOverviewCardText)
+      TextInput({ text: this.argumentInputText(action, arg) })
+        .type(arg.format === 'int' || arg.format === 'float' ? InputType.Number : InputType.Normal)
+        .onChange((text: string) => {
+          this.updateActionArgumentValue(action, arg.piid, text);
+        })
+    }
+  }
+
   build() {
     HdsNavDestination() {
       Stack({ alignContent: Alignment.TopStart }) {
@@ -942,14 +1222,7 @@ export struct DeviceDetailPage {
                 .fontColor(HwColor.danger)
             }
 
-            if (this.loading) {
-              Text('加载中…')
-                .fontFamily(this.appFontFamily('加载中…'))
-                .fontWeight(this.appFontWeight())
-                .fontSize(14)
-                .fontColor(HwColor.textSecondary)
-                .padding({ top: 24, bottom: 24 })
-            } else if (!this.offline) {
+            if (!this.loading && !this.offline) {
               if (this.showPowerInfo) {
                 Column({ space: 6 }) {
                   Text('用电信息')
@@ -985,17 +1258,26 @@ export struct DeviceDetailPage {
 
               this.trendChart()
 
-              Text('实时状态')
-                .fontFamily(this.appFontFamily('实时状态'))
-                .fontWeight(this.appFontWeight())
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(HwColor.textPrimary)
+              if (this.actions.length > 0) {
+                Row({ space: 12 }) {
+                  this.tabPill('status', '实时状态')
+                  this.tabPill('actions', '动作')
+                }
+                .width('100%')
+                .justifyContent(FlexAlign.Center)
+              } else {
+                Text('实时状态')
+                  .fontFamily(this.appFontFamily('实时状态'))
+                  .fontWeight(this.appFontWeight())
+                  .fontSize(16)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(HwColor.textPrimary)
+              }
 
               // 属性卡片：1×1 与 1×2 混合布局。
               // 相关的只读读数（如电流/电压/功率）合并为 1×2 卡片；
               // 读取不到数值的只读项自动隐藏。
-              if (this.controls.length > 0) {
+              if (this.activeTab === 'status' && this.controls.length > 0) {
                 Flex({
                   wrap: FlexWrap.Wrap,
                   justifyContent: FlexAlign.SpaceBetween,
@@ -1010,6 +1292,10 @@ export struct DeviceDetailPage {
                   }, (item: ControlLayoutItem) => item.key)
                 }
                 .width('100%')
+              }
+
+              if (this.activeTab === 'actions') {
+                this.advancedActionsSection()
               }
             }
 

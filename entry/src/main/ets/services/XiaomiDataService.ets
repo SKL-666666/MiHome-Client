@@ -32,10 +32,12 @@ import { XiaomiHomeSnapshot } from '../models/CacheState';
 import { JsonCache } from '../storage/JsonCache';
 import { XiaomiHomeRepository } from '../repositories/XiaomiHomeRepository';
 import { XiaomiSpecRepository } from '../repositories/XiaomiSpecRepository';
-import { MijiaApiClient, MijiaAuthData } from '../cloud/MijiaApiClient';
+import { MijiaApiClient, MijiaAuthData, MijiaConsumableItem, MijiaMessageItem } from '../cloud/MijiaApiClient';
 import { SecureMijiaAuthStorage } from '../storage/SecureMijiaAuthStorage';
 import { MijiaDeviceTransport } from '../controllers/MijiaDeviceTransport';
 import { MijiaSpecClient } from '../miot/MijiaSpecClient';
+import { LanDeviceTransport } from '../lan/LanDeviceTransport';
+import { LanDeviceSession } from '../models/LanDeviceSession';
 
 export class XiaomiDataService {
   private mijiaAuth: MijiaAuthData | null = null;
@@ -136,9 +138,23 @@ export class XiaomiDataService {
     return repository.loadSnapshot(forceRefresh);
   }
 
-  async getDeviceController(): Promise<DeviceController> {
+  async getDeviceController(device?: XiaomiDevice): Promise<DeviceController> {
     await this.ensureReady();
-    return new DeviceController(new MijiaDeviceTransport(this.mijiaClient!), this.eventBus);
+    const cloudTransport = new MijiaDeviceTransport(this.mijiaClient!);
+    if (device !== undefined && device.token.length >= 32 && device.localIp.length > 0) {
+      const session: LanDeviceSession = {
+        did: device.did,
+        address: device.localIp,
+        port: 54321,
+        tokenHex: device.token,
+        keyHex: '',
+        ivHex: ''
+      };
+      const lanTransport = new LanDeviceTransport();
+      lanTransport.connect(session);
+      return new DeviceController(cloudTransport, this.eventBus, lanTransport);
+    }
+    return new DeviceController(cloudTransport, this.eventBus);
   }
 
   async getDeviceStatistics(
@@ -151,6 +167,22 @@ export class XiaomiDataService {
   ): Promise<Object[]> {
     await this.ensureReady();
     return this.mijiaClient!.getStatistics(did, key, dataType, limit, timeStart, timeEnd);
+  }
+
+  async checkCloudMessages(beginAt?: number): Promise<Record<string, Object>> {
+    await this.ensureReady();
+    return this.mijiaClient!.checkNewMsg(beginAt);
+  }
+
+  async getCloudMessageList(homeId: string): Promise<MijiaMessageItem[]> {
+    await this.ensureReady();
+    return this.mijiaClient!.getMessageList(homeId);
+  }
+
+  async getConsumableItems(homeId: string): Promise<MijiaConsumableItem[]> {
+    await this.ensureReady();
+    const ownerUid = await this.mijiaClient!.getHomeOwner(homeId);
+    return this.mijiaClient!.getConsumableItems(homeId, ownerUid);
   }
 
   getEventBus(): DeviceEventBus {

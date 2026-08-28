@@ -30,6 +30,12 @@ export interface XiaomiAuthInfo {
   redirectUri: string;
   clientId: string;
   updatedAt: number;
+  /** get_token result.uid：米家用户 ID */
+  userId?: string;
+  /** 云端请求签名密钥 */
+  ssecurity?: string;
+  /** 米家 serviceToken */
+  serviceToken?: string;
 }
 
 export function createAuthInfoFromTokenResult(
@@ -46,6 +52,11 @@ export function createAuthInfoFromTokenResult(
     throw new Error('invalid token result');
   }
   const expiresSeconds = Math.floor(expiresIn * TOKEN_EXPIRES_TS_RATIO);
+  const rawUid = asString(result['uid']).length > 0 ? asString(result['uid']) : asString(result['userId']);
+  const rawSsecurity = asString(result['ssecurity']);
+  const rawServiceToken = asString(result['service_token']).length > 0
+    ? asString(result['service_token'])
+    : asString(result['serviceToken']);
   return {
     accessToken: accessToken,
     refreshToken: refreshToken,
@@ -54,7 +65,10 @@ export function createAuthInfoFromTokenResult(
     region: region,
     redirectUri: redirectUri,
     clientId: clientId,
-    updatedAt: nowMs
+    updatedAt: nowMs,
+    userId: rawUid.length > 0 ? rawUid : undefined,
+    ssecurity: rawSsecurity.length > 0 ? rawSsecurity : undefined,
+    serviceToken: rawServiceToken.length > 0 ? rawServiceToken : undefined
   };
 }
 

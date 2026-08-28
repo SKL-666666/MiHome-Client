@@ -20,7 +20,7 @@ import { DeviceController } from '../controllers/DeviceController';
 import { DevicePropertyParam, DevicePropertyResult } from '../controllers/DeviceTransport';
 import { DeviceRemovalStore } from '../storage/DeviceRemovalStore';
 import { MIoTSpecInstance } from '../models/MIotSpecModels';
-import { PropertyControlDescriptor, buildServiceControls, CapabilityControlType, translateMiotText } from '../components/CapabilityRenderer';
+import { PropertyControlDescriptor, buildServiceControls, CapabilityControlType, resolveServiceDisplayNames, translateMiotText } from '../components/CapabilityRenderer';
 import { PropertyControl } from '../components/PropertyControl';
 
 interface PickerValueState {
@@ -120,8 +120,9 @@ struct SceneCreatePage {
 
   buildControls(spec: MIoTSpecInstance): PropertyControlDescriptor[] {
     const result: PropertyControlDescriptor[] = [];
+    const displayNames = resolveServiceDisplayNames(spec.services);
     for (let i = 0; i < spec.services.length; i++) {
-      const controls = buildServiceControls(spec.services[i]);
+      const controls = buildServiceControls(spec.services[i], displayNames);
       for (let j = 0; j < controls.length; j++) {
         if (controls[j].writable && controls[j].type !== CapabilityControlType.READOUT) {
           result.push(controls[j]);

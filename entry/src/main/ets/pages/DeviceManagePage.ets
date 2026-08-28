@@ -388,6 +388,8 @@ export struct DeviceManagePage {
           Blank()
           IconCircleButton({
             symbol: $r('sys.symbol.arrow_counterclockwise'),
+            buttonEnabled: !this.refreshing,
+            spinning: this.refreshing,
             onAction: () => {
               this.handleRefresh();
             }

@@ -99,7 +99,7 @@ export class XiaomiOAuthClient {
 
   private async getToken(data: TokenRequestData): Promise<XiaomiAuthInfo> {
     const host = getXiaomiApiHost(this.config.region);
-    const url = `https://${host}/app/v2/ha/oauth/get_token?data=${encodeURIComponent(JSON.stringify(data))}`;
+    const url = `https://${host}/app/v2/ha/oauth/get_token?data=${encodeURIComponent(buildTokenDataJson(data))}`;
     const response = await XiaomiHttpClient.get(url, {
       headers: {
         'content-type': 'application/x-www-form-urlencoded'
@@ -124,19 +124,17 @@ export class XiaomiOAuthClient {
         'invalid token response'
       );
     }
-    const code = asNumber(parsed['code']);
-    if (code !== 0) {
-      throw new XiaomiAuthError(
-        XiaomiErrorCode.AUTH_TOKEN_EXCHANGE_FAILED,
-        asString(parsed['message']) || 'token exchange failed',
-        response.status
-      );
-    }
+    const rawCode = parsed['code'];
     const result = parsed['result'];
-    if (result === undefined || result === null) {
+    if ((rawCode !== undefined && asNumber(rawCode) !== 0) || result === undefined || result === null) {
+      const detail = asString(parsed['message'])
+        || asString(parsed['error_description'])
+        || response.body
+        || 'token exchange failed';
       throw new XiaomiAuthError(
         XiaomiErrorCode.AUTH_TOKEN_EXCHANGE_FAILED,
-        'token result missing'
+        detail,
+        response.status
       );
     }
     return createAuthInfoFromTokenResult(
@@ -155,6 +153,23 @@ interface TokenRequestData {
   code?: string;
   device_id?: string;
   refresh_token?: string;
+}
+
+function buildTokenDataJson(data: TokenRequestData): string {
+  const clientId = data.client_id.trim();
+  const clientIdJson = /^\d+$/.test(clientId) ? clientId : JSON.stringify(clientId);
+  const parts: string[] = [`"client_id":${clientIdJson}`];
+  parts.push(`"redirect_uri":${JSON.stringify(data.redirect_uri)}`);
+  if (data.code !== undefined) {
+    parts.push(`"code":${JSON.stringify(data.code)}`);
+  }
+  if (data.device_id !== undefined) {
+    parts.push(`"device_id":${JSON.stringify(data.device_id)}`);
+  }
+  if (data.refresh_token !== undefined) {
+    parts.push(`"refresh_token":${JSON.stringify(data.refresh_token)}`);
+  }
+  return `{${parts.join(',')}}`;
 }
 
 export function createOAuthClient(region: string, uuid: string, redirectUri?: string): XiaomiOAuthClient {

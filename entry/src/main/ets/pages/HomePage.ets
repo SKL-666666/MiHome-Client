@@ -36,6 +36,7 @@ import { FeedbackLogService } from '../services/FeedbackLogService';
 import { Logger } from '../utils/Logger';
 import { DataSourceState } from '../models/CacheState';
 import { XiaomiAuthError } from '../models/XiaomiErrors';
+import { MijiaMessageItem } from '../cloud/MijiaApiClient';
 import {
   HwColor,
   HwRadius,
@@ -267,6 +268,9 @@ struct HomePage {
   @State scenesError: string = '';
   @State alerts: AlertItem[] = [];
   @State alertsLoading: boolean = false;
+  @State cloudMessages: MijiaMessageItem[] = [];
+  @State cloudMessageLoading: boolean = false;
+  @State cloudMessageLoaded: boolean = false;
 
   aboutToAppear(): void {
     FeedbackLogService.setCurrentPage('首页');
@@ -729,6 +733,47 @@ struct HomePage {
     } finally {
       this.alertsLoading = false;
     }
+  }
+
+  private async refreshCloudMessages(): Promise<void> {
+    if (this.cloudMessageLoading || this.selectedHomeId.length === 0) {
+      return;
+    }
+    this.cloudMessageLoading = true;
+    try {
+      const items = await xiaomiDataService.getCloudMessageList(this.selectedHomeId);
+      this.cloudMessages = items;
+      this.cloudMessageLoaded = true;
+    } catch (err) {
+      Logger.warn('load cloud messages failed, %{public}s',
+        err instanceof Error ? err.message : String(err));
+      if (err instanceof XiaomiAuthError) {
+        await xiaomiDataService.clearSession();
+        this.getUIContext().getRouter().replaceUrl({ url: 'pages/LoginPage' });
+      }
+    } finally {
+      this.cloudMessageLoading = false;
+    }
+  }
+
+  private formatCloudMessageTime(timeSec: number): string {
+    if (timeSec <= 0) {
+      return '';
+    }
+    const date = new Date(timeSec * 1000);
+    const now = new Date();
+    const hh = `${date.getHours()}`.padStart(2, '0');
+    const mm = `${date.getMinutes()}`.padStart(2, '0');
+    if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
+      && date.getDate() === now.getDate()) {
+      return `${hh}:${mm}`;
+    }
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    if (date.getFullYear() === now.getFullYear()) {
+      return `${month}月${day}日 ${hh}:${mm}`;
+    }
+    return `${date.getFullYear()}年${month}月${day}日`;
   }
 
   private async fetchAlertValues(
@@ -1602,6 +1647,7 @@ struct HomePage {
       this.loadScenes(false);
     } else if (this.activeTab === 2) {
       this.buildAlerts();
+      this.refreshCloudMessages();
     } else if (this.activeTab === 3) {
       this.loadData(true, true);
       this.loadAccount();
@@ -1643,9 +1689,18 @@ struct HomePage {
         .fontSize(24)
         .fontColor([this.activeTab === 1 ? HwColor.primary : HwColor.textSecondary])
     } else if (index === 2) {
-      SymbolGlyph(this.activeTab === 2 ? $r('sys.symbol.bell_fill') : $r('sys.symbol.bell'))
-        .fontSize(24)
-        .fontColor([this.activeTab === 2 ? HwColor.primary : HwColor.textSecondary])
+      Stack({ alignContent: Alignment.TopEnd }) {
+        SymbolGlyph(this.activeTab === 2 ? $r('sys.symbol.bell_fill') : $r('sys.symbol.bell'))
+          .fontSize(24)
+          .fontColor([this.activeTab === 2 ? HwColor.primary : HwColor.textSecondary])
+        if (this.cloudMessages.length > 0 && this.activeTab !== 2) {
+          Circle()
+            .width(8)
+            .height(8)
+            .fill(HwColor.danger)
+            .margin({ top: 1, right: 1 })
+        }
+      }
     } else {
       SymbolGlyph(this.activeTab === 3 ? $r('sys.symbol.person_fill') : $r('sys.symbol.person'))
         .fontSize(24)
@@ -2307,6 +2362,32 @@ struct HomePage {
       .clip(true)
 
       Column() {
+        Row({ space: 10 }) {
+          SymbolGlyph($r('sys.symbol.leaf'))
+            .fontSize(20)
+            .fontColor([Color.White])
+          Text('耗材中心')
+            .fontFamily(this.appFontFamily('耗材中心'))
+            .fontWeight(this.appFontWeight())
+            .fontSize(15)
+            .fontColor(Color.White)
+            .layoutWeight(1)
+          SymbolGlyph($r('sys.symbol.chevron_right'))
+            .fontSize(16)
+            .fontColor([MijiaOverviewCardText])
+        }
+        .width('100%')
+        .padding(HwSpace.lg)
+        .hoverEffect(HoverEffect.Highlight)
+        .onClick(() => {
+          FeedbackLogService.recordOperation('UI', '进入耗材中心');
+          this.getUIContext().getRouter().pushUrl({ url: 'pages/ConsumablesPage' });
+        })
+
+        Divider()
+          .color('#24FFFFFF')
+          .margin({ left: HwSpace.lg, right: HwSpace.lg })
+
         Row({ space: 10 }) {
           SymbolGlyph($r('sys.symbol.house_fill'))
             .fontSize(20)
@@ -3173,6 +3254,52 @@ struct HomePage {
   }
 
   @Builder
+  cloudMessageCard(msg: MijiaMessageItem) {
+    Row({ space: 12 }) {
+      SymbolGlyph($r('sys.symbol.envelope'))
+        .fontSize(20)
+        .fontColor([MijiaOverviewCardText])
+      Column({ space: 4 }) {
+        Row({ space: 8 }) {
+          Text(msg.title)
+            .fontFamily(this.appFontFamily(msg.title))
+            .fontWeight(this.appFontWeight())
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Color.White)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Blank()
+          Text(this.formatCloudMessageTime(msg.time))
+            .fontFamily(this.appFontFamily(this.formatCloudMessageTime(msg.time)))
+            .fontWeight(this.appFontWeight())
+            .fontSize(11)
+            .fontColor(MijiaOverviewCardText)
+            .maxLines(1)
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+        if (msg.desc.length > 0) {
+          Text(msg.desc)
+            .fontFamily(this.appFontFamily(msg.desc))
+            .fontWeight(this.appFontWeight())
+            .fontSize(12)
+            .fontColor(MijiaOverviewCardText)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+    }
+    .width('100%')
+    .padding(HwSpace.lg)
+    .borderRadius(HwRadius.card)
+    .backgroundColor(MijiaOverviewCard)
+    .alignItems(VerticalAlign.Top)
+  }
+
+  @Builder
   alertCard(alert: AlertItem) {
     Row({ space: 12 }) {
       SymbolGlyph(alert.level === 'warn'
@@ -3265,7 +3392,8 @@ struct HomePage {
         }, (scene: LocalScene) => scene.sceneId)
       }
 
-      if (this.scenesLoading) {
+      // 下拉刷新时 Refresh 头部已展示「正在刷新…」，仅在首次加载（尚无数据）时显示加载胶囊。
+      if (this.scenesLoading && this.scenes.length === 0 && this.localScenes.length === 0) {
         Row() {
           Row({ space: 6 }) {
             LoadingProgress()
@@ -3360,7 +3488,8 @@ struct HomePage {
         .position({ x: 0, y: 0 })
         .hitTestBehavior(HitTestMode.None)
       }
-      if (!this.alertsLoading && this.alerts.length === 0) {
+      if (!this.alertsLoading && !this.cloudMessageLoading
+        && this.alerts.length === 0 && this.cloudMessages.length === 0) {
         Column({ space: 8 }) {
           SymbolGlyph($r('sys.symbol.bell'))
             .fontSize(30)
@@ -3370,14 +3499,58 @@ struct HomePage {
             .fontWeight(this.appFontWeight())
             .fontSize(15)
             .fontColor(HwColor.textPrimary)
-          Text('耗材不足、低电量、设备离线等提醒会显示在这里')
-            .fontFamily(this.appFontFamily('耗材不足、低电量、设备离线等提醒会显示在这里'))
+          Text('设备通知、耗材不足、低电量、设备离线等消息会显示在这里')
+            .fontFamily(this.appFontFamily('设备通知、耗材不足、低电量、设备离线等消息会显示在这里'))
             .fontWeight(this.appFontWeight())
             .fontSize(12)
             .fontColor(HwColor.textSecondary)
         }
         .width('100%')
         .padding({ top: 40, bottom: 40 })
+      }
+
+      if (this.cloudMessages.length > 0) {
+        Row({ space: 8 }) {
+          SymbolGlyph($r('sys.symbol.envelope'))
+            .fontSize(16)
+            .fontColor([HwColor.textPrimary])
+          Text('云端消息')
+            .fontFamily(this.appFontFamily('云端消息'))
+            .fontWeight(this.appFontWeight())
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(HwColor.textPrimary)
+          Blank()
+          Text(`${this.cloudMessages.length} 条`)
+            .fontFamily(this.appFontFamily(`${this.cloudMessages.length} 条`))
+            .fontWeight(this.appFontWeight())
+            .fontSize(12)
+            .fontColor(HwColor.textSecondary)
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+        .padding({ top: 4 })
+
+        ForEach(this.cloudMessages, (msg: MijiaMessageItem) => {
+          this.cloudMessageCard(msg)
+        }, (msg: MijiaMessageItem) => `${msg.messageId}_${msg.time}`)
+      }
+
+      if (this.alerts.length > 0) {
+        Row({ space: 8 }) {
+          SymbolGlyph($r('sys.symbol.bell_fill'))
+            .fontSize(16)
+            .fontColor([HwColor.textPrimary])
+          Text('设备提醒')
+            .fontFamily(this.appFontFamily('设备提醒'))
+            .fontWeight(this.appFontWeight())
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(HwColor.textPrimary)
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+        .padding({ top: 4 })
       }
 
       ForEach(this.alerts, (alert: AlertItem) => {
@@ -3690,7 +3863,8 @@ struct HomePage {
 
   private handleAlertPullRefresh(): void {
     this.alertRefreshing = true;
-    this.buildAlerts().finally(() => {
+    this.buildAlerts();
+    this.refreshCloudMessages().finally(() => {
       this.alertRefreshing = false;
     });
   }
@@ -3715,6 +3889,7 @@ struct HomePage {
       this.loadScenes(false);
     } else if (index === 2) {
       this.buildAlerts();
+      this.refreshCloudMessages();
     } else if (index === 3) {
       this.loadData(true, true);
       this.loadAccount();

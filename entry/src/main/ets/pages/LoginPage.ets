@@ -131,85 +131,101 @@ struct LoginPage {
     }
   }
 
-  build() {
-    Stack() {
-      AppBackground()
+  @Builder
+  QrPanel() {
+    Column({ space: 18 }) {
       Column() {
-        Column({ space: HwSpace.sm }) {
-        Text('米家控制')
-          .fontFamily(this.appFontFamily('米家控制'))
-          .fontWeight(this.appFontWeight())
-          .fontSize(this.isWearable ? 24 : 32)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(HwColor.textPrimary)
-
-        Text('使用小米/米家 App 扫码登录')
-          .fontFamily(this.appFontFamily('使用小米/米家 App 扫码登录'))
-          .fontWeight(this.appFontWeight())
-          .fontSize(this.isWearable ? 13 : 16)
-          .fontColor(HwColor.textSecondary)
-      }
-        .margin({ top: this.isWearable ? 24 : 72, bottom: this.isWearable ? 16 : 32 })
-
-      Column({ space: 18 }) {
-        Column() {
-          if (this.qrUrl.length > 0) {
-            Image(this.qrUrl)
-              .width(this.isWearable ? 160 : 240)
-              .height(this.isWearable ? 160 : 240)
-              .objectFit(ImageFit.Contain)
-          } else {
-            Text('二维码将显示在这里')
-              .fontFamily(this.appFontFamily('二维码将显示在这里'))
-              .fontWeight(this.appFontWeight())
-              .fontSize(14)
-              .fontColor(HwColor.textSecondary)
-          }
-        }
-        .width(this.isWearable ? 160 : 240)
-        .height(this.isWearable ? 160 : 240)
-        .justifyContent(FlexAlign.Center)
-        .borderRadius(HwRadius.card)
-        .backgroundColor(MijiaOverviewCard)
-        .border({ width: 1, color: '#24FFFFFF' })
-        .clip(true)
-
-        PressableButton({
-          label: this.loading ? '等待扫码...' : '生成二维码登录',
-          emphasized: true,
-          loading: this.loading,
-          fullWidth: true,
-          buttonHeight: 48,
-          role: ButtonRole.NORMAL,
-          onAction: () => {
-            this.startMijiaLogin();
-          }
-        })
-
-        if (this.statusMessage.length > 0) {
-          Text(this.statusMessage)
-            .fontFamily(this.appFontFamily(this.statusMessage))
+        if (this.qrUrl.length > 0) {
+          Image(this.qrUrl)
+            .width(this.isWearable ? 160 : 240)
+            .height(this.isWearable ? 160 : 240)
+            .objectFit(ImageFit.Contain)
+        } else {
+          Text('二维码将显示在这里')
+            .fontFamily(this.appFontFamily('二维码将显示在这里'))
             .fontWeight(this.appFontWeight())
             .fontSize(14)
-            .fontColor(MijiaOverviewCardValue)
-        }
-
-        if (this.errorMessage.length > 0) {
-          Text(this.errorMessage)
-            .fontFamily(this.appFontFamily(this.errorMessage))
-            .fontWeight(this.appFontWeight())
-            .fontSize(14)
-            .fontColor(HwColor.danger)
+            .fontColor(HwColor.textSecondary)
         }
       }
-      .width('100%')
-      .padding(this.isWearable ? HwSpace.md : HwSpace.xl)
+      .width(this.isWearable ? 160 : 240)
+      .height(this.isWearable ? 160 : 240)
+      .justifyContent(FlexAlign.Center)
       .borderRadius(HwRadius.card)
       .backgroundColor(MijiaOverviewCard)
       .border({ width: 1, color: '#24FFFFFF' })
       .clip(true)
 
-      Blank()
+      PressableButton({
+        label: this.loading ? '等待扫码...' : '生成二维码登录',
+        emphasized: true,
+        loading: this.loading,
+        fullWidth: true,
+        buttonHeight: 48,
+        role: ButtonRole.NORMAL,
+        onAction: () => {
+          this.startMijiaLogin();
+        }
+      })
+    }
+    .width('100%')
+    .padding(this.isWearable ? HwSpace.md : HwSpace.xl)
+    .borderRadius(HwRadius.card)
+    .backgroundColor(MijiaOverviewCard)
+    .border({ width: 1, color: '#24FFFFFF' })
+    .clip(true)
+  }
+
+  build() {
+    Stack() {
+      AppBackground()
+      Column() {
+        Column({ space: HwSpace.sm }) {
+          Text('米家控制')
+            .fontFamily(this.appFontFamily('米家控制'))
+            .fontWeight(this.appFontWeight())
+            .fontSize(this.isWearable ? 24 : 32)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(HwColor.textPrimary)
+
+          Text('登录后管理你的米家设备')
+            .fontFamily(this.appFontFamily('登录后管理你的米家设备'))
+            .fontWeight(this.appFontWeight())
+            .fontSize(this.isWearable ? 13 : 16)
+            .fontColor(HwColor.textSecondary)
+        }
+        .margin({ top: this.isWearable ? 24 : 48, bottom: this.isWearable ? 16 : 24 })
+
+        Scroll() {
+          Column({ space: 18 }) {
+            this.QrPanel()
+
+            if (this.statusMessage.length > 0) {
+              Text(this.statusMessage)
+                .fontFamily(this.appFontFamily(this.statusMessage))
+                .fontWeight(this.appFontWeight())
+                .fontSize(14)
+                .fontColor(MijiaOverviewCardValue)
+                .textAlign(TextAlign.Center)
+                .width('100%')
+            }
+
+            if (this.errorMessage.length > 0) {
+              Text(this.errorMessage)
+                .fontFamily(this.appFontFamily(this.errorMessage))
+                .fontWeight(this.appFontWeight())
+                .fontSize(14)
+                .fontColor(HwColor.danger)
+                .textAlign(TextAlign.Center)
+                .width('100%')
+            }
+          }
+          .width('100%')
+        }
+        .layoutWeight(1)
+        .width('100%')
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
       }
       .width('100%')
       .height('100%')

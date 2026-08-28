@@ -230,7 +230,18 @@ const MIOT_TEXT_DICTIONARY: Record<string, string> = {
   'dnd': '勿扰',
   'away': '离家',
   'home': '在家',
-  'vacation': '度假'
+  'vacation': '度假',
+  'access mode': '接入方式',
+  'wifi service set identifier': 'WiFi 配置',
+  'dhcp server mac adress': 'DHCP 服务器 MAC 地址',
+  'wireless 5 g': '无线 5G',
+  'wireless 5g': '无线 5G',
+  'wireless 2 g': '无线 2G',
+  'wireless 2g': '无线 2G',
+  'virtual param': '虚拟参数',
+  'emit virtual event': '触发虚拟事件',
+  'mode for ir': '模式',
+  'temperature for ir': '温度'
 };
 
 /** 全局通用 MIoT 词条翻译：词典精确匹配 + 组合词/分词多级回退，未命中原样返回 */
@@ -1125,9 +1136,12 @@ function isHiddenService(service: MIoTSpecService): boolean {
  * 2. 已知服务 + 通用开关属性 → “功能名+开关”；
  * 3. 其余走通用字典翻译。
  */
-function resolveLabel(service: MIoTSpecService, description: string, isBool: boolean): string {
+function resolveLabel(service: MIoTSpecService, description: string, isBool: boolean, serviceDisplayName?: string): string {
   const serviceKey = serviceKeyOf(service);
   if (isBool && isGenericOnOff(description)) {
+    if (serviceDisplayName !== undefined && serviceDisplayName.length > 0) {
+      return serviceDisplayName;
+    }
     const boolLabel = SERVICE_BOOL_LABELS[serviceKey];
     if (boolLabel !== undefined) {
       return boolLabel;
@@ -1138,6 +1152,68 @@ function resolveLabel(service: MIoTSpecService, description: string, isBool: boo
     }
   }
   return translateMiotText(description);
+}
+
+/**
+ * 通用动作名：spec 中不同服务都有 “toggle” 等动作，翻译后全是“切换”，
+ * 用户无法分辨是哪个功能，需要像 resolveLabel 一样补上服务上下文，
+ * 例如 “灯光·切换”“童锁·切换”。
+ */
+const GENERIC_ACTION_LABELS: string[] = [
+  'toggle', 'switch', '切换', '开关', '开', '关'
+];
+
+function resolveActionLabel(service: MIoTSpecService, action: MIoTSpecAction, serviceDisplayName?: string): string {
+  const raw = action.description.trim().length > 0 ? action.description : action.name;
+  const label = translateMiotText(raw);
+  if (GENERIC_ACTION_LABELS.indexOf(label.trim()) < 0) {
+    return label;
+  }
+  const serviceName = serviceDisplayName !== undefined && serviceDisplayName.length > 0
+    ? serviceDisplayName
+    : SERVICE_LABEL_DICTIONARY[serviceKeyOf(service)];
+  return serviceName === undefined ? label : `${serviceName}·${label}`;
+}
+
+/**
+ * 多实例服务消歧：排插多路插孔、多键墙开等设备的 spec 会有多个同名服务
+ * （URN 服务名相同、仅 siid 不同），直接翻译会出现一排完全一样的
+ * “开关 / 开关·切换”。统计同名服务数量，为多实例服务生成带编号的显示名
+ * （开关1、开关2…），单实例服务保持原样。
+ */
+export function resolveServiceDisplayNames(services: MIoTSpecService[]): Map<number, string> {
+  const keyCounts = new Map<string, number>();
+  for (let i = 0; i < services.length; i++) {
+    if (isHiddenService(services[i])) {
+      continue;
+    }
+    const key = serviceKeyOf(services[i]);
+    keyCounts.set(key, (keyCounts.get(key) ?? 0) + 1);
+  }
+  const running = new Map<string, number>();
+  const names = new Map<number, string>();
+  for (let i = 0; i < services.length; i++) {
+    const service = services[i];
+    if (isHiddenService(service)) {
+      continue;
+    }
+    const key = serviceKeyOf(service);
+    if ((keyCounts.get(key) ?? 1) <= 1) {
+      continue;
+    }
+    const index = (running.get(key) ?? 0) + 1;
+    running.set(key, index);
+    let baseName = SERVICE_LABEL_DICTIONARY[key];
+    if (baseName === undefined) {
+      const raw = service.description.trim().length > 0 ? service.description : service.name;
+      baseName = translateMiotText(raw);
+    }
+    if (baseName.trim().length === 0) {
+      continue;
+    }
+    names.set(service.iid, `${baseName}${index}`);
+  }
+  return names;
 }
 
 const MIOT_UNIT_DICTIONARY: Record<string, string> = {
@@ -1263,7 +1339,8 @@ export interface ActionArgumentDescriptor {
 
 export function resolvePropertyControl(
   service: MIoTSpecService,
-  property: MIoTSpecProperty
+  property: MIoTSpecProperty,
+  serviceDisplayName?: string
 ): PropertyControlDescriptor {
   const type = resolveControlType(property);
   const valueRange = property.valueRange;
@@ -1271,7 +1348,7 @@ export function resolvePropertyControl(
   const optionValues: Object[] = [];
   const propText = property.description.trim().length > 0 ? property.description : property.name;
   const isOnOff = isGenericOnOff(propText);
-  const label = resolveLabel(service, propText, isOnOff);
+  const label = resolveLabel(service, propText, isOnOff, serviceDisplayName);
   for (let i = 0; i < property.valueList.length; i++) {
     const itemText = property.valueList[i].description.trim().length > 0 ?
       property.valueList[i].description : property.valueList[i].name;
@@ -1315,7 +1392,8 @@ function isPowerProperty(service: MIoTSpecService, property: MIoTSpecProperty, l
 
 export function resolveActionControl(
   service: MIoTSpecService,
-  action: MIoTSpecAction
+  action: MIoTSpecAction,
+  serviceDisplayName?: string
 ): ActionControlDescriptor {
   const args: ActionArgumentDescriptor[] = [];
   for (let i = 0; i < action.inPiids.length; i++) {
@@ -1337,7 +1415,7 @@ export function resolveActionControl(
     const isArgOnOff = isGenericOnOff(argText);
     args.push({
       piid: piid,
-      label: resolveLabel(service, argText, isArgOnOff),
+      label: resolveLabel(service, argText, isArgOnOff, serviceDisplayName),
       format: prop.format,
       unit: translateMiotUnit(prop.unit),
       min: range === null ? 0 : range.min,
@@ -1351,33 +1429,35 @@ export function resolveActionControl(
     siid: service.iid,
     aiid: action.iid,
     type: CapabilityControlType.BUTTON,
-    label: translateMiotText(action.description.trim().length > 0 ? action.description : action.name),
+    label: resolveActionLabel(service, action, serviceDisplayName),
     argumentPiids: action.inPiids,
     arguments: args
   };
 }
 
-export function buildServiceControls(service: MIoTSpecService): PropertyControlDescriptor[] {
+export function buildServiceControls(service: MIoTSpecService, displayNames?: Map<number, string>): PropertyControlDescriptor[] {
   const controls: PropertyControlDescriptor[] = [];
   if (isHiddenService(service)) {
     return controls;
   }
+  const displayName = displayNames?.get(service.iid);
   for (let i = 0; i < service.properties.length; i++) {
     if (isDeviceInfoProperty(service.properties[i]) || isNamelessProperty(service.properties[i])) {
       continue;
     }
-    controls.push(resolvePropertyControl(service, service.properties[i]));
+    controls.push(resolvePropertyControl(service, service.properties[i], displayName));
   }
   return controls;
 }
 
-export function buildServiceActions(service: MIoTSpecService): ActionControlDescriptor[] {
+export function buildServiceActions(service: MIoTSpecService, displayNames?: Map<number, string>): ActionControlDescriptor[] {
   const actions: ActionControlDescriptor[] = [];
   if (isHiddenService(service)) {
     return actions;
   }
+  const displayName = displayNames?.get(service.iid);
   for (let i = 0; i < service.actions.length; i++) {
-    actions.push(resolveActionControl(service, service.actions[i]));
+    actions.push(resolveActionControl(service, service.actions[i], displayName));
   }
   return actions;
 }
