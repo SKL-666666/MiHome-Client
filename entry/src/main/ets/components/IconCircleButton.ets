@@ -24,27 +24,40 @@ export struct IconCircleButton {
   @Prop buttonSize: number = 40;
   @Prop iconSize: number = 20;
   @Prop buttonEnabled: boolean = true;
-  @Prop spinning: boolean = false;
+  @Prop @Watch('handleSpinningChange') spinning: boolean = false;
   @Prop tint: string = '#182431';
+  @State spinAngle: number = 0;
   symbol: Resource = $r('sys.symbol.house');
   onAction: () => void = (): void => {
   };
 
+  private handleSpinningChange(): void {
+    if (!this.spinning) {
+      this.spinAngle = 0;
+    }
+  }
+
   build() {
     Button({ type: ButtonType.Circle, stateEffect: true }) {
-      SymbolGlyph(this.symbol)
-        .fontSize(this.iconSize)
-        .fontColor([this.tint])
-        .rotate({
-          z: 1,
-          angle: this.spinning ? 360 : 0
-        })
-        .animation({
-          duration: 900,
-          curve: Curve.Linear,
-          iterations: this.spinning ? -1 : 1,
-          playMode: PlayMode.Normal
-        })
+      if (this.spinning) {
+        SymbolGlyph(this.symbol)
+          .fontSize(this.iconSize)
+          .fontColor([this.tint])
+          .rotate({ z: 1, angle: this.spinAngle })
+          .animation({
+            duration: 900,
+            curve: Curve.Linear,
+            iterations: -1,
+            playMode: PlayMode.Normal
+          })
+          .onAppear(() => {
+            this.spinAngle = 360;
+          })
+      } else {
+        SymbolGlyph(this.symbol)
+          .fontSize(this.iconSize)
+          .fontColor([this.tint])
+      }
     }
     .width(this.buttonSize)
     .height(this.buttonSize)

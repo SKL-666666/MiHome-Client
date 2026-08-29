@@ -28,9 +28,20 @@
 
 ## 📲 下载
 
-前往 [Releases](https://github.com/SKL-666666/MiHome-Client/releases) 下载现成的 hap 安装包（v1.0.0），侧载即可。
+前往 [Releases](https://github.com/SKL-666666/MiHome-Client/releases) 下载现成的 hap 安装包（v1.1.0），侧载即可。
 
 想自己折腾也可以从源码构建：用 DevEco Studio（HarmonyOS SDK，API 26+）打开项目，在 `File > Project Structure > Signing Configs` 配置自己的签名后构建安装。
+
+## 🆕 更新日志
+
+### v1.1.0
+
+- 修复浅色模式下「设备提醒」等文字不可见的问题
+- 修复设备页刷新按钮不停旋转的问题
+- 智能页默认展示自动化场景
+- 首页房间名在浅色模式下改为白色文字
+- 主题色彩全面响应式适配
+- 版本号更新至 1.1.0，About 页补充版本特性 / 致谢 / 开源许可
 
 ## 🙏 致谢
 

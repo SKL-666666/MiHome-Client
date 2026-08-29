@@ -186,6 +186,14 @@ struct HomePage {
   private appFontWeight(): number {
     return this.fontWeightMode === 'custom' ? this.fontWeightValue : 400;
   }
+
+  private textPrimaryColor(): string {
+    return this.isDarkMode ? '#EDF1F7' : '#1A1A1A';
+  }
+
+  private textSecondaryColor(): string {
+    return this.isDarkMode ? '#9BA8BC' : '#7A8089';
+  }
   @Provide('pageInfos') pageInfos: NavPathStack = new NavPathStack();
   private tabsController: HdsTabsController = new HdsTabsController();
   private homeScroller: Scroller = new Scroller();
@@ -276,7 +284,7 @@ struct HomePage {
   @State localScenes: LocalScene[] = [];
   @State scenesLoading: boolean = false;
   @State scenesError: string = '';
-  @State sceneCategory: string = 'local';
+  @State sceneCategory: string = 'auto';
   @State lightsOffing: boolean = false;
   @State alerts: AlertItem[] = [];
   @State alertsLoading: boolean = false;
@@ -1986,7 +1994,7 @@ struct HomePage {
           .fontWeight(this.appFontWeight())
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor(HwColor.textPrimary)
+          .fontColor(this.textPrimaryColor())
           .layoutWeight(1)
         IconCircleButton({
           symbol: $r('sys.symbol.xmark'),
@@ -2280,22 +2288,22 @@ struct HomePage {
     if (index === 0) {
       SymbolGlyph(this.activeTab === 0 ? $r('sys.symbol.house_fill') : $r('sys.symbol.house'))
         .fontSize(24)
-        .fontColor([this.activeTab === 0 ? HwColor.primary : HwColor.textSecondary])
+        .fontColor([this.activeTab === 0 ? HwColor.primary : this.textSecondaryColor()])
     } else if (index === 1 && this.isWearable) {
       SymbolGlyph((this.activeTab === 1 || this.activeTab === 3)
         ? $r('sys.symbol.person_fill') : $r('sys.symbol.person'))
         .fontSize(24)
         .fontColor([(this.activeTab === 1 || this.activeTab === 3)
-          ? HwColor.primary : HwColor.textSecondary])
+          ? HwColor.primary : this.textSecondaryColor()])
     } else if (index === 1) {
       SymbolGlyph(this.activeTab === 1 ? $r('sys.symbol.bolt_fill') : $r('sys.symbol.bolt'))
         .fontSize(24)
-        .fontColor([this.activeTab === 1 ? HwColor.primary : HwColor.textSecondary])
+        .fontColor([this.activeTab === 1 ? HwColor.primary : this.textSecondaryColor()])
     } else if (index === 2) {
       Stack({ alignContent: Alignment.TopEnd }) {
         SymbolGlyph(this.activeTab === 2 ? $r('sys.symbol.bell_fill') : $r('sys.symbol.bell'))
           .fontSize(24)
-          .fontColor([this.activeTab === 2 ? HwColor.primary : HwColor.textSecondary])
+          .fontColor([this.activeTab === 2 ? HwColor.primary : this.textSecondaryColor()])
         if (this.cloudMessages.length > 0 && this.activeTab !== 2) {
           Circle()
             .width(8)
@@ -2307,7 +2315,7 @@ struct HomePage {
     } else {
       SymbolGlyph(this.activeTab === 3 ? $r('sys.symbol.person_fill') : $r('sys.symbol.person'))
         .fontSize(24)
-        .fontColor([this.activeTab === 3 ? HwColor.primary : HwColor.textSecondary])
+        .fontColor([this.activeTab === 3 ? HwColor.primary : this.textSecondaryColor()])
     }
   }
 
@@ -2319,7 +2327,7 @@ struct HomePage {
         .fontFamily(this.appFontFamily(this.tabLabel(index)))
         .fontWeight(this.appFontWeight())
         .fontSize(12)
-        .fontColor(this.activeTab === index ? HwColor.primary : HwColor.textSecondary)
+        .fontColor(this.activeTab === index ? HwColor.primary : this.textSecondaryColor())
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
@@ -2331,34 +2339,34 @@ struct HomePage {
   tabBarStyle(index: number): BottomTabBarStyle {
     if (index === 0) {
       const homeNormal = new SymbolGlyphModifier($r('sys.symbol.house'));
-      homeNormal.fontColor([HwColor.textSecondary]);
+      homeNormal.fontColor([this.textSecondaryColor()]);
       const homeSelected = new SymbolGlyphModifier($r('sys.symbol.house_fill'));
       homeSelected.fontColor([HwColor.primary]);
       return new BottomTabBarStyle({ normal: homeNormal, selected: homeSelected }, '首页');
     }
     if (index === 1 && this.isWearable) {
       const mineNormal = new SymbolGlyphModifier($r('sys.symbol.person'));
-      mineNormal.fontColor([HwColor.textSecondary]);
+      mineNormal.fontColor([this.textSecondaryColor()]);
       const mineSelected = new SymbolGlyphModifier($r('sys.symbol.person_fill'));
       mineSelected.fontColor([HwColor.primary]);
       return new BottomTabBarStyle({ normal: mineNormal, selected: mineSelected }, '我的');
     }
     if (index === 1) {
       const smartNormal = new SymbolGlyphModifier($r('sys.symbol.bolt'));
-      smartNormal.fontColor([HwColor.textSecondary]);
+      smartNormal.fontColor([this.textSecondaryColor()]);
       const smartSelected = new SymbolGlyphModifier($r('sys.symbol.bolt_fill'));
       smartSelected.fontColor([HwColor.primary]);
       return new BottomTabBarStyle({ normal: smartNormal, selected: smartSelected }, '智能');
     }
     if (index === 2) {
       const alertNormal = new SymbolGlyphModifier($r('sys.symbol.bell'));
-      alertNormal.fontColor([HwColor.textSecondary]);
+      alertNormal.fontColor([this.textSecondaryColor()]);
       const alertSelected = new SymbolGlyphModifier($r('sys.symbol.bell_fill'));
       alertSelected.fontColor([HwColor.primary]);
       return new BottomTabBarStyle({ normal: alertNormal, selected: alertSelected }, '信息');
     }
     const mineNormal = new SymbolGlyphModifier($r('sys.symbol.person'));
-    mineNormal.fontColor([HwColor.textSecondary]);
+    mineNormal.fontColor([this.textSecondaryColor()]);
     const mineSelected = new SymbolGlyphModifier($r('sys.symbol.person_fill'));
     mineSelected.fontColor([HwColor.primary]);
     return new BottomTabBarStyle({ normal: mineNormal, selected: mineSelected }, '我的');
@@ -2443,13 +2451,13 @@ struct HomePage {
         .fontFamily(this.appFontFamily(chip.name))
         .fontWeight(this.appFontWeight())
         .fontSize(14)
-        .fontColor(this.selectedRoomKey === chip.key ? HwColor.primary : (this.isDarkMode ? Color.White : HwColor.textPrimary))
+        .fontColor(this.selectedRoomKey === chip.key ? HwColor.primary : Color.White)
         .maxLines(1)
       Text(String(chip.count))
         .fontFamily(this.appFontFamily(String(chip.count)))
         .fontWeight(this.appFontWeight())
         .fontSize(11)
-        .fontColor(this.selectedRoomKey === chip.key ? HwColor.primary : (this.isDarkMode ? Color.White : HwColor.textPrimary))
+        .fontColor(this.selectedRoomKey === chip.key ? HwColor.primary : Color.White)
         .opacity(0.75)
         .maxLines(1)
     }
@@ -2829,7 +2837,7 @@ struct HomePage {
       Row({ space: 8 }) {
         SymbolGlyph($r('sys.symbol.magnifyingglass'))
           .fontSize(16)
-          .fontColor([HwColor.textSecondary])
+          .fontColor([this.textSecondaryColor()])
         TextInput({ text: this.searchKeyword, placeholder: '搜索设备名称、型号或房间' })
           .layoutWeight(1)
           .height(36)
@@ -2837,8 +2845,8 @@ struct HomePage {
           .padding(0)
           .fontSize(14)
           .placeholderFont({ size: 14 })
-          .fontColor(HwColor.textPrimary)
-          .placeholderColor(HwColor.textSecondary)
+          .fontColor(this.textPrimaryColor())
+          .placeholderColor(this.textSecondaryColor())
           .caretColor(HwColor.primary)
           .onChange((value: string) => {
             this.searchKeyword = value;
@@ -2847,7 +2855,7 @@ struct HomePage {
         if (this.searchKeyword.length > 0) {
           SymbolGlyph($r('sys.symbol.xmark_circle_fill'))
             .fontSize(16)
-            .fontColor([HwColor.textSecondary])
+            .fontColor([this.textSecondaryColor()])
             .onClick(() => {
               this.searchKeyword = '';
               this.updateFilteredDevices();
@@ -2855,7 +2863,7 @@ struct HomePage {
         }
         SymbolGlyph($r('sys.symbol.line_3_horizontal'))
           .fontSize(18)
-          .fontColor([HwColor.textSecondary])
+          .fontColor([this.textSecondaryColor()])
           .bindMenu(this.deviceSortMenu())
       }
       .width('100%')
@@ -2892,7 +2900,7 @@ struct HomePage {
           .fontFamily(this.appFontFamily(this.searchKeyword.trim().length > 0 ? '没有匹配的设备，换个关键词试试' : (this.selectedRoomKey === ROOM_ALL_KEY ? '没有设备' : '该房间暂无设备')))
           .fontWeight(this.appFontWeight())
           .fontSize(14)
-          .fontColor(HwColor.textSecondary)
+          .fontColor(this.textSecondaryColor())
           .width('100%')
           .textAlign(TextAlign.Center)
           .padding({ top: 24, bottom: 24 })
@@ -3353,7 +3361,7 @@ struct HomePage {
           .fontWeight(this.appFontWeight())
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor(HwColor.textPrimary)
+          .fontColor(this.textPrimaryColor())
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
@@ -3377,7 +3385,7 @@ struct HomePage {
             .fontFamily(this.appFontFamily('暂无提供温度的设备'))
             .fontWeight(this.appFontWeight())
             .fontSize(14)
-            .fontColor(HwColor.textSecondary)
+            .fontColor(this.textSecondaryColor())
             .padding({ top: 12, bottom: 12 })
         }
         ForEach(this.temperatureDevices, (entry: InfoDeviceEntry) => {
@@ -3401,7 +3409,7 @@ struct HomePage {
           .fontWeight(this.appFontWeight())
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor(HwColor.textPrimary)
+          .fontColor(this.textPrimaryColor())
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
@@ -3425,7 +3433,7 @@ struct HomePage {
             .fontFamily(this.appFontFamily('暂无提供湿度的设备'))
             .fontWeight(this.appFontWeight())
             .fontSize(14)
-            .fontColor(HwColor.textSecondary)
+            .fontColor(this.textSecondaryColor())
             .padding({ top: 12, bottom: 12 })
         }
         ForEach(this.humidityDevices, (entry: InfoDeviceEntry) => {
@@ -3449,7 +3457,7 @@ struct HomePage {
           .fontWeight(this.appFontWeight())
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor(HwColor.textPrimary)
+          .fontColor(this.textPrimaryColor())
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
@@ -3473,7 +3481,7 @@ struct HomePage {
             .fontFamily(this.appFontFamily('暂无提供PM2.5的设备'))
             .fontWeight(this.appFontWeight())
             .fontSize(14)
-            .fontColor(HwColor.textSecondary)
+            .fontColor(this.textSecondaryColor())
             .padding({ top: 12, bottom: 12 })
         }
         ForEach(this.pm25Devices, (entry: InfoDeviceEntry) => {
@@ -3497,7 +3505,7 @@ struct HomePage {
           .fontWeight(this.appFontWeight())
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor(HwColor.textPrimary)
+          .fontColor(this.textPrimaryColor())
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
@@ -3521,7 +3529,7 @@ struct HomePage {
             .fontFamily(this.appFontFamily('当前没有开启中的设备'))
             .fontWeight(this.appFontWeight())
             .fontSize(14)
-            .fontColor(HwColor.textSecondary)
+            .fontColor(this.textSecondaryColor())
             .padding({ top: 12, bottom: 12 })
         }
         ForEach(this.onDevices, (entry: InfoDeviceEntry) => {
@@ -3582,7 +3590,7 @@ struct HomePage {
           .fontWeight(this.appFontWeight())
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor(HwColor.textPrimary)
+          .fontColor(this.textPrimaryColor())
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
@@ -3604,7 +3612,7 @@ struct HomePage {
         .fontFamily(this.appFontFamily('勾选后该设备的数据不再计入信息页'))
         .fontWeight(this.appFontWeight())
         .fontSize(12)
-        .fontColor(HwColor.textSecondary)
+        .fontColor(this.textSecondaryColor())
         .width('100%')
         .padding({ left: HwSpace.lg, right: HwSpace.lg, bottom: 8 })
 
@@ -3613,7 +3621,7 @@ struct HomePage {
           .fontFamily(this.appFontFamily('暂无设备'))
           .fontWeight(this.appFontWeight())
           .fontSize(14)
-          .fontColor(HwColor.textSecondary)
+          .fontColor(this.textSecondaryColor())
           .padding({ top: 24, bottom: 24 })
       } else {
         Scroll() {
@@ -3685,7 +3693,7 @@ struct HomePage {
           .fontWeight(this.appFontWeight())
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor(HwColor.textPrimary)
+          .fontColor(this.textPrimaryColor())
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
@@ -3708,7 +3716,7 @@ struct HomePage {
           .fontFamily(this.appFontFamily('暂无家庭，请先下拉刷新'))
           .fontWeight(this.appFontWeight())
           .fontSize(14)
-          .fontColor(HwColor.textSecondary)
+          .fontColor(this.textSecondaryColor())
           .padding({ top: 24, bottom: 24 })
       } else {
         Scroll() {
@@ -3778,7 +3786,7 @@ struct HomePage {
           .fontFamily(this.appFontFamily('加载中…'))
           .fontWeight(this.appFontWeight())
           .fontSize(14)
-          .fontColor(HwColor.textSecondary)
+          .fontColor(this.textSecondaryColor())
           .padding({ top: 24, bottom: 24 })
       }
       if (this.infoError.length > 0) {
@@ -3793,7 +3801,7 @@ struct HomePage {
           .fontFamily(this.appFontFamily('当前家庭暂无可用设备数据'))
           .fontWeight(this.appFontWeight())
           .fontSize(14)
-          .fontColor(HwColor.textSecondary)
+          .fontColor(this.textSecondaryColor())
       }
 
       Column() {
@@ -4110,13 +4118,13 @@ struct HomePage {
         .fontFamily(this.appFontFamily(label))
         .fontWeight(this.appFontWeight())
         .fontSize(14)
-        .fontColor(this.sceneCategory === key ? HwColor.primary : (this.isDarkMode ? Color.White : HwColor.textPrimary))
+        .fontColor(this.sceneCategory === key ? HwColor.primary : (this.isDarkMode ? Color.White : this.textPrimaryColor()))
         .maxLines(1)
       Text(String(this.categoryCount(key)))
         .fontFamily(this.appFontFamily(String(this.categoryCount(key))))
         .fontWeight(this.appFontWeight())
         .fontSize(11)
-        .fontColor(this.sceneCategory === key ? HwColor.primary : (this.isDarkMode ? Color.White : HwColor.textPrimary))
+        .fontColor(this.sceneCategory === key ? HwColor.primary : (this.isDarkMode ? Color.White : this.textPrimaryColor()))
         .opacity(0.75)
         .maxLines(1)
     }
@@ -4217,17 +4225,17 @@ struct HomePage {
           Column({ space: 8 }) {
             SymbolGlyph($r('sys.symbol.plus'))
               .fontSize(30)
-              .fontColor([HwColor.textSecondary])
+              .fontColor([this.textSecondaryColor()])
             Text('还没有本地智能')
               .fontFamily(this.appFontFamily('还没有本地智能'))
               .fontWeight(this.appFontWeight())
               .fontSize(15)
-              .fontColor(HwColor.textPrimary)
+              .fontColor(this.textPrimaryColor())
             Text('点击上方「创建智能」新建定时或批量动作')
               .fontFamily(this.appFontFamily('点击上方「创建智能」新建定时或批量动作'))
               .fontWeight(this.appFontWeight())
               .fontSize(12)
-              .fontColor(HwColor.textSecondary)
+              .fontColor(this.textSecondaryColor())
           }
           .width('100%')
           .padding({ top: 40, bottom: 40 })
@@ -4240,12 +4248,12 @@ struct HomePage {
               LoadingProgress()
                 .width(14)
                 .height(14)
-                .color(HwColor.textSecondary)
+                .color(this.textSecondaryColor())
               Text('加载中…')
                 .fontFamily(this.appFontFamily('加载中…'))
                 .fontWeight(this.appFontWeight())
                 .fontSize(12)
-                .fontColor(HwColor.textSecondary)
+                .fontColor(this.textSecondaryColor())
             }
             .alignItems(VerticalAlign.Center)
             .padding({ left: 12, right: 12, top: 6, bottom: 6 })
@@ -4273,17 +4281,17 @@ struct HomePage {
           Column({ space: 8 }) {
             SymbolGlyph($r('sys.symbol.bolt'))
               .fontSize(30)
-              .fontColor([HwColor.textSecondary])
+              .fontColor([this.textSecondaryColor()])
             Text(this.sceneCategory === 'auto' ? '暂无自动化' : '暂无手动场景')
               .fontFamily(this.appFontFamily(this.sceneCategory === 'auto' ? '暂无自动化' : '暂无手动场景'))
               .fontWeight(this.appFontWeight())
               .fontSize(15)
-              .fontColor(HwColor.textPrimary)
+              .fontColor(this.textPrimaryColor())
             Text('前往米家App创建后，这里会同步显示')
               .fontFamily(this.appFontFamily('前往米家App创建后，这里会同步显示'))
               .fontWeight(this.appFontWeight())
               .fontSize(12)
-              .fontColor(HwColor.textSecondary)
+              .fontColor(this.textSecondaryColor())
           }
           .width('100%')
           .padding({ top: 40, bottom: 40 })
@@ -4311,12 +4319,12 @@ struct HomePage {
             LoadingProgress()
               .width(14)
               .height(14)
-              .color(HwColor.textSecondary)
+              .color(this.textSecondaryColor())
             Text('加载中…')
               .fontFamily(this.appFontFamily('加载中…'))
               .fontWeight(this.appFontWeight())
               .fontSize(12)
-              .fontColor(HwColor.textSecondary)
+              .fontColor(this.textSecondaryColor())
           }
           .alignItems(VerticalAlign.Center)
           .padding({ left: 12, right: 12, top: 6, bottom: 6 })
@@ -4334,17 +4342,17 @@ struct HomePage {
         Column({ space: 8 }) {
           SymbolGlyph($r('sys.symbol.bell'))
             .fontSize(30)
-            .fontColor([HwColor.textSecondary])
+            .fontColor([this.textSecondaryColor()])
           Text('暂无提醒')
             .fontFamily(this.appFontFamily('暂无提醒'))
             .fontWeight(this.appFontWeight())
             .fontSize(15)
-            .fontColor(HwColor.textPrimary)
+            .fontColor(this.textPrimaryColor())
           Text('设备通知、耗材不足、低电量、设备离线等消息会显示在这里')
             .fontFamily(this.appFontFamily('设备通知、耗材不足、低电量、设备离线等消息会显示在这里'))
             .fontWeight(this.appFontWeight())
             .fontSize(12)
-            .fontColor(HwColor.textSecondary)
+            .fontColor(this.textSecondaryColor())
         }
         .width('100%')
         .padding({ top: 40, bottom: 40 })
@@ -4354,13 +4362,13 @@ struct HomePage {
         Row({ space: 8 }) {
           SymbolGlyph($r('sys.symbol.envelope'))
             .fontSize(16)
-            .fontColor([HwColor.textPrimary])
+            .fontColor([this.textPrimaryColor()])
           Text('云端消息')
             .fontFamily(this.appFontFamily('云端消息'))
             .fontWeight(this.appFontWeight())
             .fontSize(15)
             .fontWeight(FontWeight.Medium)
-            .fontColor(HwColor.textPrimary)
+            .fontColor(this.textPrimaryColor())
           Blank()
           if (this.unreadMessageIds.length > 0) {
             Text(`${this.unreadMessageIds.length} 条未读`)
@@ -4382,7 +4390,7 @@ struct HomePage {
               .fontFamily(this.appFontFamily(`${this.cloudMessages.length} 条`))
               .fontWeight(this.appFontWeight())
               .fontSize(12)
-              .fontColor(HwColor.textSecondary)
+              .fontColor(this.textSecondaryColor())
           }
         }
         .width('100%')
@@ -4398,13 +4406,13 @@ struct HomePage {
         Row({ space: 8 }) {
           SymbolGlyph($r('sys.symbol.bell_fill'))
             .fontSize(16)
-            .fontColor([HwColor.textPrimary])
+            .fontColor([this.textPrimaryColor()])
           Text('设备提醒')
             .fontFamily(this.appFontFamily('设备提醒'))
             .fontWeight(this.appFontWeight())
             .fontSize(15)
             .fontWeight(FontWeight.Medium)
-            .fontColor(HwColor.textPrimary)
+            .fontColor(this.textPrimaryColor())
         }
         .width('100%')
         .alignItems(VerticalAlign.Center)
@@ -4436,7 +4444,7 @@ struct HomePage {
       }
       Text(this.homeRefreshText)
         .fontSize(13)
-        .fontColor(HwColor.textSecondary)
+        .fontColor(this.textSecondaryColor())
     }
     .width('100%')
     .height(44)
@@ -4454,7 +4462,7 @@ struct HomePage {
       }
       Text(this.smartRefreshText)
         .fontSize(13)
-        .fontColor(HwColor.textSecondary)
+        .fontColor(this.textSecondaryColor())
     }
     .width('100%')
     .height(44)
@@ -4472,7 +4480,7 @@ struct HomePage {
       }
       Text(this.alertRefreshText)
         .fontSize(13)
-        .fontColor(HwColor.textSecondary)
+        .fontColor(this.textSecondaryColor())
     }
     .width('100%')
     .height(44)
@@ -4641,7 +4649,7 @@ struct HomePage {
         .fontFamily(this.appFontFamily(this.tabLabel(index)))
         .fontWeight(this.appFontWeight())
         .fontSize(11)
-        .fontColor(this.activeTab === index ? HwColor.primary : HwColor.textSecondary)
+        .fontColor(this.activeTab === index ? HwColor.primary : this.textSecondaryColor())
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
