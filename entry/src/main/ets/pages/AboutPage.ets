@@ -75,7 +75,7 @@ struct AboutPage {
       );
       return bundleInfo.versionName;
     } catch (err) {
-      return '1.1.0';
+      return '1.2.0';
     }
   }
 
@@ -187,9 +187,6 @@ struct AboutPage {
           .alignItems(HorizontalAlign.Center)
           .margin({ top: 28 })
 
-          this.sectionCard('本版更新（v1.1.0）',
-            '修复浅色模式下「设备提醒」等文字不可见、设备页刷新按钮不停旋转；智能页默认展示自动化；首页房间名改为白色适配；主题色彩改为响应式更新。')
-
           Column({ space: 0 }) {
             this.linkRow('开发者：SKL666666', 'https://www.coolapk.com/u/40478967')
             Divider()
@@ -205,10 +202,6 @@ struct AboutPage {
 
           Column({ space: 0 }) {
             this.linkRow('MrCashmere/miha_hm（项目基础）', 'https://github.com/MrCashmere/miha_hm')
-            Divider()
-              .color('#14000000')
-              .margin({ left: HwSpace.lg, right: HwSpace.lg })
-            this.linkRow('Do1e/mijia-api（协议参考）', 'https://github.com/Do1e/mijia-api')
           }
           .width('100%')
           .borderRadius(HwRadius.card)
@@ -217,14 +210,14 @@ struct AboutPage {
           .clip(true)
 
           this.sectionCard('开源许可',
-            '基于开源项目「鸿米家」二次开发，依原项目许可以 GPL v3 开源发布，详见 LICENSE 文件。')
+            '本项目以 GPL v3 协议开源发布，详见 LICENSE 文件。')
         }
         .width('100%')
         .padding({ left: HwSpace.lg, right: HwSpace.lg, bottom: 24 })
       }
       .layoutWeight(1)
 
-      Text('v1.1.0 · 反馈 BUG 请提交日志，感谢支持')
+      Text('v1.2.0 · 反馈 BUG 请提交日志，感谢支持')
         .fontFamily(this.appFontFamily('v1.1.0 · 反馈 BUG 请提交日志，感谢支持'))
         .fontWeight(this.appFontWeight())
         .fontSize(12)

@@ -20,7 +20,8 @@
  */
 
 import { common } from '@kit.AbilityKit';
-import { MIoTSpecInstance } from '../models/MIotSpecModels';
+import { MIoTSpecInstance, parseMIoTSpecInstance } from '../models/MIotSpecModels';
+import { Logger } from '../utils/Logger';
 import { XiaomiAuthError, XiaomiErrorCode } from '../models/XiaomiErrors';
 import { XiaomiDevice, XiaomiHome, XiaomiScene, XiaomiUser } from '../models/XiaomiHomeModels';
 import { MIoTSpecParser } from '../miot/MIoTSpecParser';
@@ -119,6 +120,29 @@ export class XiaomiDataService {
       return this.specParser.parse(device.urn);
     }
     return this.mijiaSpecClient.getByModel(device.model);
+  }
+
+  /**
+   * 详情页专用：磁盘缓存优先的 spec 获取。
+   * spec 定义极少变化，首次联网拉取成功后落盘，之后渲染不再依赖网络——
+   * 避免 miot-spec.org 抖动时设备详情页整页空白。
+   */
+  async getDeviceSpecForDeviceCached(device: XiaomiDevice, context: common.UIAbilityContext): Promise<MIoTSpecInstance> {
+    await this.ensureReady();
+    const jsonCache = new JsonCache(context);
+    const cacheKey = device.urn.length > 0 ? device.urn : `model:${device.model}`;
+    const prefix = 'miot_spec_v1_';
+    const cachedRaw = jsonCache.get(`${prefix}${cacheKey}`);
+    if (cachedRaw.length > 0) {
+      try {
+        return parseMIoTSpecInstance(JSON.parse(cachedRaw) as Record<string, Object>);
+      } catch (err) {
+        Logger.warn('invalid cached spec, %{public}s', cacheKey);
+      }
+    }
+    const spec = await this.getDeviceSpecForDevice(device);
+    jsonCache.set(`${prefix}${cacheKey}`, JSON.stringify(spec));
+    return spec;
   }
 
   async getDeviceSpecCached(

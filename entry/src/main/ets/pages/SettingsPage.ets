@@ -67,6 +67,7 @@ struct SettingsPage {
   widthBp: WidthBreakpoint = WidthBreakpoint.WIDTH_SM;
   @State isWideScreen: boolean = false;
   @StorageLink('hideOfflineDevices') hideOfflineDevices: boolean = false;
+  @StorageLink('showOverviewCards') showOverviewCards: boolean = true;
   @StorageLink('dualColumnMode') dualColumnMode: boolean = false;
   @StorageLink('autoMultiColumn') autoMultiColumn: boolean = false;
   @StorageLink('homeSmoothSwitch') homeSmoothSwitch: boolean = false;
@@ -263,6 +264,34 @@ struct SettingsPage {
                 Toggle({ type: ToggleType.Switch, isOn: this.hideOfflineDevices })
                   .onChange((isOn: boolean) => {
                     this.updateBoolean('hideOfflineDevices', isOn);
+                  })
+              }
+              .width('100%')
+              .padding(HwSpace.lg)
+              .borderRadius(HwRadius.card)
+              .backgroundColor(MijiaOverviewCard)
+              .border({ width: 1, color: '#24FFFFFF' })
+              .clip(true)
+
+              // 显示概览卡片
+              Row({ space: 12 }) {
+                Column({ space: 4 }) {
+                  Text('显示概览卡片')
+                    .fontFamily(this.appFontFamily('显示概览卡片'))
+                    .fontWeight(this.appFontWeight())
+                    .fontSize(15)
+                    .fontColor(Color.White)
+                  Text('关闭后首页不显示温度/湿度等概览卡片')
+                    .fontFamily(this.appFontFamily('关闭后首页不显示温度/湿度等概览卡片'))
+                    .fontWeight(this.appFontWeight())
+                    .fontSize(12)
+                    .fontColor(MijiaOverviewCardText)
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+                Toggle({ type: ToggleType.Switch, isOn: this.showOverviewCards })
+                  .onChange((isOn: boolean) => {
+                    this.updateBoolean('showOverviewCards', isOn);
                   })
               }
               .width('100%')

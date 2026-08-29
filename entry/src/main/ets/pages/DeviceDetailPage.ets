@@ -20,12 +20,15 @@
  */
 
 import { HdsNavDestination } from '@kit.UIDesignKit';
+import { common } from '@kit.AbilityKit';
 import {
   ActionControlDescriptor,
   ActionArgumentDescriptor,
   buildServiceActions,
   buildServiceControls,
   CapabilityControlType,
+  dedupeControlLabels,
+  markPrimaryPower,
   PropertyControlDescriptor,
   resolveServiceDisplayNames
 } from '../components/CapabilityRenderer';
@@ -33,15 +36,15 @@ import { PropertyControl } from '../components/PropertyControl';
 import { DeviceController } from '../controllers/DeviceController';
 import { DevicePropertyParam, DevicePropertyResult } from '../controllers/DeviceTransport';
 import { MIoTSpecInstance } from '../models/MIotSpecModels';
-import { XiaomiDevice } from '../models/XiaomiHomeModels';
+import { XiaomiDevice, XiaomiHome } from '../models/XiaomiHomeModels';
 import { xiaomiDataService } from '../services/XiaomiDataService';
 import { FeedbackLogService } from '../services/FeedbackLogService';
 import { Logger } from '../utils/Logger';
-import { HwColor, HwRadius, HwSpace, MijiaOverviewCard, MijiaOverviewCardPressed, MijiaOverviewCardText, MijiaOverviewCardValue, MijiaSheetBackground } from '../utils/DesignTokens';
+import { HwColor, HwRadius, HwSpace, MijiaOffButton, MijiaOnButton, MijiaOverviewCard, MijiaOverviewCardPressed, MijiaOverviewCardText, MijiaOverviewCardValue, MijiaSheetBackground } from '../utils/DesignTokens';
 import { AppBackground } from '../components/AppBackground';
 import { IconCircleButton } from '../components/IconCircleButton';
 import { AboutDeviceRouteParam, DeviceDetailRouteParam } from '../models/NavRouteParams';
-import { RoomStore } from '../storage/RoomStore';
+import { RoomStore, UserRoom } from '../storage/RoomStore';
 import { DeviceOverrideStore } from '../storage/DeviceOverrideStore';
 
 interface PropertyValueState {
@@ -118,6 +121,13 @@ export struct DeviceDetailPage {
   private scroller: Scroller = new Scroller();
   @State deviceName: string = '';
   @State controls: PropertyControlDescriptor[] = [];
+  @State extendedControls: PropertyControlDescriptor[] = [];
+  @State showExtended: boolean = false;
+  // 明面分区：电源（整排）/ 模式类选择（整排）/ 小控件（1×1）/ 只读读数（合并大卡）
+  @State powerControlList: PropertyControlDescriptor[] = [];
+  @State selectControlList: PropertyControlDescriptor[] = [];
+  @State smallControlList: PropertyControlDescriptor[] = [];
+  @State readoutControlList: PropertyControlDescriptor[] = [];
   @State actions: ActionControlDescriptor[] = [];
   @State values: PropertyValueState[] = [];
   @State loading: boolean = true;
@@ -139,6 +149,7 @@ export struct DeviceDetailPage {
   @State manageName: string = '';
   @State manageRoomId: string = '';
   @State manageRooms: ManageRoomOption[] = [];
+  @State manageCurrentRoom: string = '';
   private trendDevice: XiaomiDevice | null = null;
   private trendSpec: MIoTSpecInstance | null = null;
   @StorageProp('navigationBarHeight') navigationBarHeight: number = 0;
@@ -181,18 +192,26 @@ export struct DeviceDetailPage {
       FeedbackLogService.recordOperation('PAGE',
         `设备详情: ${device.name} did=${device.did} model=${device.model} 在线=${device.online ? '是' : '否'}`);
       if (device.online) {
-        const spec = await xiaomiDataService.getDeviceSpecForDevice(device);
-        this.controls = this.buildControls(spec);
+        // 磁盘缓存优先：网络抖动不再导致详情页整页空白
+        const context = getContext(this) as common.UIAbilityContext;
+        const spec = await xiaomiDataService.getDeviceSpecForDeviceCached(device, context);
+        this.logSpecSummary(device, spec);
+        this.splitControls(this.buildControls(spec));
         this.actions = this.buildActions(spec);
-        this.buildValueStates(this.controls);
+        this.buildValueStates(this.controls.concat(this.extendedControls));
         this.buildActionArgumentStates(this.actions);
         this.controller = await xiaomiDataService.getDeviceController(device);
         await this.refreshValues();
         this.recordDeviceValues();
         await this.loadPowerInfo(device, spec);
-        await this.loadTrendInfo(device, spec);
+        // 趋势图仅温湿度计加载，其余设备不再请求统计
+        if (this.isTempHumiditySensor(device)) {
+          await this.loadTrendInfo(device, spec);
+        }
       } else {
         this.controls = [];
+        this.extendedControls = [];
+        this.showExtended = false;
         this.actions = [];
       }
     } catch (err) {
@@ -213,6 +232,27 @@ export struct DeviceDetailPage {
     FeedbackLogService.recordOperation('PAGE', `设备详情页属性: ${parts.join(' | ')}`);
   }
 
+  /** 诊断日志：输出 spec 服务/属性清单（键/读写），用于精准修正标签与常用分级 */
+  private logSpecSummary(device: XiaomiDevice, spec: MIoTSpecInstance): void {
+    const parts: string[] = [];
+    for (let i = 0; i < spec.services.length; i++) {
+      const service = spec.services[i];
+      const segments = service.type.split(':');
+      const serviceKey = segments.length >= 4 ? segments[3] : service.type;
+      const props: string[] = [];
+      for (let j = 0; j < service.properties.length; j++) {
+        const prop = service.properties[j];
+        const propSegments = prop.type.split(':');
+        const propKey = propSegments.length >= 4 ? propSegments[3] : prop.type;
+        const access = `${prop.readable ? 'r' : ''}${prop.writable ? 'w' : ''}`;
+        props.push(`${prop.iid}:${propKey}(${access})`);
+      }
+      parts.push(`s${service.iid}:${serviceKey}{${props.join(',')}}`);
+    }
+    Logger.info('spec summary did=%{public}s model=%{public}s urn=%{public}s :: %{public}s',
+      device.did, device.model, device.urn, parts.join(' | '));
+  }
+
   buildControls(spec: MIoTSpecInstance): PropertyControlDescriptor[] {
     const result: PropertyControlDescriptor[] = [];
     // 多实例服务（排插多路、多键墙开）先编号（开关1/开关2…）再参与去重；
@@ -231,7 +271,86 @@ export struct DeviceDetailPage {
         result.push(controls[j]);
       }
     }
+    // 多主电源收敛：只保留第一个电源圆钮并置顶，其余降级为普通开关；
+    // 重名标签消歧：仍完全同名的控制追加 ·2/·3 序号
+    markPrimaryPower(result);
+    dedupeControlLabels(result);
     return result;
+  }
+
+  /**
+   * 按 isCommon 把属性拆成明面常用区与「更多功能」折叠区。
+   * 兜底保护：常用区没有任何可写控制而设备本身有可写属性时，不折叠、全部平铺，
+   * 避免未知品类设备详情页空白。
+   */
+  private splitControls(all: PropertyControlDescriptor[]): void {
+    const common: PropertyControlDescriptor[] = [];
+    const extended: PropertyControlDescriptor[] = [];
+    let commonWritable = 0;
+    let anyWritable = 0;
+    for (let i = 0; i < all.length; i++) {
+      const control = all[i];
+      if (control.writable) {
+        anyWritable++;
+      }
+      if (control.isCommon) {
+        common.push(control);
+        if (control.writable) {
+          commonWritable++;
+        }
+      } else {
+        extended.push(control);
+      }
+    }
+    let layout = common;
+    if (common.length === 0 || (commonWritable === 0 && anyWritable > 0)) {
+      // 兜底保护：常用区没有可写控制时全部平铺，避免未知品类设备详情页空白
+      layout = all;
+      extended.length = 0;
+    }
+    this.controls = layout;
+    this.extendedControls = extended;
+    this.showExtended = false;
+    // 除智能插座/排插外，消歧产生的「开关·N」重复开关收纳进折叠区
+    if (!this.isPlugDevice()) {
+      for (let i = layout.length - 1; i >= 0; i--) {
+        if (/·\d+$/.test(layout[i].label)) {
+          extended.push(layout[i]);
+          layout.splice(i, 1);
+        }
+      }
+    }
+    this.partitionLayoutControls(layout);
+  }
+
+  /** 插座/排插判断：多路插孔的编号开关（开关1/开关2…）保留在明面 */
+  private isPlugDevice(): boolean {
+    if (this.device === null) {
+      return false;
+    }
+    const text = `${this.device.model} ${this.device.name}`.toLowerCase();
+    return text.includes('plug') || text.includes('socket') || text.includes('outlet') ||
+      text.includes('插座') || text.includes('排插') || text.includes('插线板');
+  }
+
+  /** 明面分区：电源整排卡、模式类选择整排卡、其余 1×1 小卡、只读读数合并大卡 */
+  private partitionLayoutControls(controls: PropertyControlDescriptor[]): void {
+    this.powerControlList = [];
+    this.selectControlList = [];
+    this.smallControlList = [];
+    this.readoutControlList = [];
+    for (let i = 0; i < controls.length; i++) {
+      const control = controls[i];
+      if (control.isPower && control.type === CapabilityControlType.TOGGLE) {
+        this.powerControlList.push(control);
+      } else if (control.type === CapabilityControlType.SELECT) {
+        this.selectControlList.push(control);
+      } else if (control.type === CapabilityControlType.READOUT && !control.writable) {
+        this.readoutControlList.push(control);
+      } else {
+        this.smallControlList.push(control);
+      }
+    }
   }
 
   buildActions(spec: MIoTSpecInstance): ActionControlDescriptor[] {
@@ -289,14 +408,16 @@ export struct DeviceDetailPage {
         return;
       }
       const params: DevicePropertyParam[] = [];
-      for (let i = 0; i < this.controls.length; i++) {
-        if (!this.controls[i].readable) {
+      // 折叠区属性同样参与取值，展开「更多功能」时读数立即可见
+      const allControls = this.controls.concat(this.extendedControls);
+      for (let i = 0; i < allControls.length; i++) {
+        if (!allControls[i].readable) {
           continue;
         }
         params.push({
           did: this.did,
-          siid: this.controls[i].siid,
-          piid: this.controls[i].piid
+          siid: allControls[i].siid,
+          piid: allControls[i].piid
         });
       }
       if (params.length === 0) {
@@ -308,8 +429,8 @@ export struct DeviceDetailPage {
         valueMap.set(`${results[i].siid}.${results[i].piid}`, results[i].value);
       }
       const newValues: PropertyValueState[] = [];
-      for (let i = 0; i < this.controls.length; i++) {
-        const control = this.controls[i];
+      for (let i = 0; i < allControls.length; i++) {
+        const control = allControls[i];
         newValues.push({
           key: `${control.siid}.${control.piid}`,
           value: valueMap.get(`${control.siid}.${control.piid}`)
@@ -464,6 +585,9 @@ export struct DeviceDetailPage {
     this.trendPoints = [];
     this.trendTitle = '';
     const candidates = this.findTrendCandidates(spec);
+    Logger.info('trend candidates did=%{public}s model=%{public}s count=%{public}d keys=%{public}s',
+      device.did, device.model, candidates.length,
+      candidates.map((c) => c.key).join(','));
     if (candidates.length === 0) {
       return;
     }
@@ -490,6 +614,8 @@ export struct DeviceDetailPage {
         start,
         now
       );
+      Logger.info('trend fetch did=%{public}s key=%{public}s type=%{public}s items=%{public}d',
+        device.did, candidates[i].key, this.trendGranularity, items.length);
       const points = this.parseTrendPoints(items, this.trendGranularity);
       if (points.length >= 2) {
         this.trendTitle = candidates[i].label;
@@ -863,6 +989,7 @@ export struct DeviceDetailPage {
     this.manageName = this.deviceName;
     this.manageRooms = this.buildManageRoomOptions();
     this.manageRoomId = '';
+    this.manageCurrentRoom = this.currentRoomTitle(device);
     const rooms = RoomStore.loadRooms();
     for (let i = 0; i < rooms.length; i++) {
       if (rooms[i].dids.indexOf(device.did) >= 0) {
@@ -871,6 +998,74 @@ export struct DeviceDetailPage {
       }
     }
     this.showManageSheet = true;
+    this.mergeCloudRoomOptions(device);
+  }
+
+  /** 当前所在房间：优先本地房间，其次云端房间名 */
+  private currentRoomTitle(device: XiaomiDevice): string {
+    const rooms = RoomStore.loadRooms();
+    for (let i = 0; i < rooms.length; i++) {
+      if (rooms[i].dids.indexOf(device.did) >= 0) {
+        const room = rooms[i];
+        return room.floor.length > 0 ? `${room.floor}楼 ${room.name}` : room.name;
+      }
+    }
+    return device.roomName.length > 0 ? device.roomName : '未分配';
+  }
+
+  /** 把设备所在家庭的云端房间并入可选项（标记 cloud: 前缀，保存时映射为同名本地房间） */
+  private async mergeCloudRoomOptions(device: XiaomiDevice): Promise<void> {
+    try {
+      const context = getContext(this) as common.UIAbilityContext;
+      const snapshot = await xiaomiDataService.getHomeSnapshot(context, false);
+      const homes = JSON.parse(snapshot.homesJson) as XiaomiHome[];
+      // 房间归属反查：房间 → dids 列表包含该设备（roomId/roomName 常为空）
+      if (this.manageCurrentRoom === '未分配') {
+        for (let h = 0; h < homes.length && this.manageCurrentRoom === '未分配'; h++) {
+          const rooms = homes[h].roomList;
+          for (let r = 0; r < rooms.length; r++) {
+            if (rooms[r].dids.indexOf(device.did) >= 0 && rooms[r].name.trim().length > 0) {
+              this.manageCurrentRoom = rooms[r].name.trim();
+              break;
+            }
+          }
+        }
+      }
+      let targetHome: XiaomiHome | null = null;
+      for (let i = 0; i < homes.length; i++) {
+        if (homes[i].homeId === device.homeId) {
+          targetHome = homes[i];
+          break;
+        }
+      }
+      if (targetHome === null) {
+        return;
+      }
+      const options = this.manageRooms.slice();
+      for (let i = 0; i < targetHome.roomList.length; i++) {
+        const room = targetHome.roomList[i];
+        // 按 roomId 解析设备所在房间（设备列表接口可能不带 roomName）
+        if (this.manageCurrentRoom === '未分配' && room.roomId === device.roomId && room.name.length > 0) {
+          this.manageCurrentRoom = room.name;
+        }
+        if (room.name.trim().length === 0) {
+          continue;
+        }
+        let exists = false;
+        for (let j = 0; j < options.length; j++) {
+          if (options[j].title === room.name) {
+            exists = true;
+            break;
+          }
+        }
+        if (!exists) {
+          options.push({ id: `cloud:${room.roomId}`, title: room.name });
+        }
+      }
+      this.manageRooms = options;
+    } catch (err) {
+      // 云端房间获取失败时仅展示本地房间
+    }
   }
 
   private saveManageSheet(): void {
@@ -888,10 +1083,43 @@ export struct DeviceDetailPage {
     this.deviceName = DeviceOverrideStore.getDisplayName(device.did, device.name);
     let roomChanged = false;
     const rooms = RoomStore.loadRooms();
+    // 云端房间选项映射为同名本地房间（不存在则自动创建并入库）
+    let targetRoomId = this.manageRoomId;
+    if (targetRoomId.startsWith('cloud:')) {
+      let optionTitle = '';
+      for (let i = 0; i < this.manageRooms.length; i++) {
+        if (this.manageRooms[i].id === targetRoomId) {
+          optionTitle = this.manageRooms[i].title;
+          break;
+        }
+      }
+      if (optionTitle.length > 0) {
+        let localRoom: UserRoom | null = null;
+        for (let i = 0; i < rooms.length; i++) {
+          if (rooms[i].name === optionTitle) {
+            localRoom = rooms[i];
+            break;
+          }
+        }
+        if (localRoom === null) {
+          localRoom = {
+            id: `local_${Date.now()}`,
+            floor: '',
+            name: optionTitle,
+            homeId: device.homeId,
+            homeName: '',
+            dids: []
+          };
+          rooms.push(localRoom);
+          RoomStore.upsertRoom(localRoom);
+        }
+        targetRoomId = localRoom.id;
+      }
+    }
     for (let i = 0; i < rooms.length; i++) {
       const room = rooms[i];
       const had = room.dids.indexOf(device.did) >= 0;
-      const should = room.id === this.manageRoomId;
+      const should = room.id === targetRoomId;
       if (had === should) {
         continue;
       }
@@ -971,9 +1199,14 @@ export struct DeviceDetailPage {
               .fontWeight(this.appFontWeight())
               .fontSize(14)
               .fontColor(HwColor.textSecondary)
+            Text(`当前：${this.manageCurrentRoom}`)
+              .fontFamily(this.appFontFamily(`当前：${this.manageCurrentRoom}`))
+              .fontWeight(this.appFontWeight())
+              .fontSize(14)
+              .fontColor(MijiaOverviewCardValue)
             if (this.manageRooms.length === 0) {
-              Text('暂无本地房间，可先在「房间管理」中创建')
-                .fontFamily(this.appFontFamily('暂无本地房间，可先在「房间管理」中创建'))
+              Text('正在加载可选房间…')
+                .fontFamily(this.appFontFamily('正在加载可选房间…'))
                 .fontWeight(this.appFontWeight())
                 .fontSize(13)
                 .fontColor(HwColor.textSecondary)
@@ -1021,7 +1254,8 @@ export struct DeviceDetailPage {
       .fontFamily(this.appFontFamily(title))
       .fontWeight(this.appFontWeight())
       .fontSize(13)
-      .fontColor(this.manageRoomId === roomId ? Color.White : HwColor.textPrimary)
+      // 未选中胶囊为白底，深浅模式下都用固定深色文字保证可读
+      .fontColor(this.manageRoomId === roomId ? Color.White : '#333333')
       .height(32)
       .padding({ left: 14, right: 14 })
       .borderRadius(16)
@@ -1155,12 +1389,12 @@ export struct DeviceDetailPage {
    * 生成属性卡片布局：同服务的只读读数（如电流/电压/功率）合并为 1×2 卡片，
    * 其余控件保持 1×1 卡片。读取不到数值的只读项会被过滤隐藏。
    */
-  private buildLayoutItems(): ControlLayoutItem[] {
+  private buildLayoutItems(controls: PropertyControlDescriptor[]): ControlLayoutItem[] {
     const items: ControlLayoutItem[] = [];
     const groups = new Map<number, PropertyControlDescriptor[]>();
     const singles: PropertyControlDescriptor[] = [];
-    for (let i = 0; i < this.controls.length; i++) {
-      const control = this.controls[i];
+    for (let i = 0; i < controls.length; i++) {
+      const control = controls[i];
       if (control.type === CapabilityControlType.READOUT && !control.writable) {
         let arr = groups.get(control.siid);
         if (arr === undefined) {
@@ -1314,6 +1548,149 @@ export struct DeviceDetailPage {
           });
         }
       })
+  }
+
+  private boolValueOf(control: PropertyControlDescriptor): boolean {
+    return this.getValue(control) === true;
+  }
+
+  /** 温湿度计判断：趋势图仅对温湿度计类设备展示（对齐米家） */
+  private isTempHumiditySensor(device: XiaomiDevice): boolean {
+    const text = `${device.model} ${device.name}`.toLowerCase();
+    return text.includes('sensor') || text.includes('thermometer') || text.includes('hygro') ||
+      text.includes('miaomiaoce') || text.includes('温湿度') || text.includes('温度计') ||
+      text.includes('湿度计');
+  }
+
+  private showTrendChart(): boolean {
+    return this.trendPoints.length >= 2 && this.device !== null && this.isTempHumiditySensor(this.device);
+  }
+
+  private anyReadableValue(readouts: PropertyControlDescriptor[]): boolean {
+    for (let i = 0; i < readouts.length; i++) {
+      if (this.hasReadableValue(readouts[i])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // 电源卡：占满整排，圆形电源按钮 + 名称/状态，对齐米家「关闭」行
+  @Builder
+  powerCard(control: PropertyControlDescriptor) {
+    Row({ space: 14 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Circle()
+          .width(56)
+          .height(56)
+          .fill(this.boolValueOf(control) ? MijiaOnButton : MijiaOffButton)
+        SymbolGlyph($r('sys.symbol.power'))
+          .fontSize(22)
+          .fontColor([this.boolValueOf(control) ? Color.White : MijiaOverviewCardText])
+      }
+      .width(56)
+      .height(56)
+      .onClick(() => {
+        this.setValue(control, !this.boolValueOf(control));
+      })
+
+      Column({ space: 3 }) {
+        Text('电源')
+          .fontFamily(this.appFontFamily('电源'))
+          .fontWeight(this.appFontWeight())
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(MijiaOverviewCardValue)
+        Text(this.boolValueOf(control) ? '已开启' : '已关闭')
+          .fontFamily(this.appFontFamily(this.boolValueOf(control) ? '已开启' : '已关闭'))
+          .fontWeight(this.appFontWeight())
+          .fontSize(13)
+          .fontColor(MijiaOverviewCardText)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+    }
+    .width('100%')
+    .padding(HwSpace.md)
+    .borderRadius(HwRadius.card)
+    .backgroundColor(MijiaOverviewCard)
+    .border({ width: 1, color: '#24FFFFFF' })
+    .clip(true)
+  }
+
+  // 只读读数合并大卡：当前温度/湿度/功率等并排展示（对齐米家用电信息卡）
+  @Builder
+  readoutSummaryCard(readouts: PropertyControlDescriptor[]) {
+    Flex({
+      wrap: FlexWrap.Wrap,
+      justifyContent: FlexAlign.SpaceBetween
+    }) {
+      ForEach(readouts, (readout: PropertyControlDescriptor) => {
+        if (this.hasReadableValue(readout)) {
+          Column({ space: 4 }) {
+            Text(readout.label)
+              .fontFamily(this.appFontFamily(readout.label))
+              .fontWeight(this.appFontWeight())
+              .fontSize(12)
+              .fontColor(MijiaOverviewCardText)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .width('100%')
+            Text(this.groupValueText(readout))
+              .fontFamily(this.appFontFamily(this.groupValueText(readout)))
+              .fontWeight(this.appFontWeight())
+              .fontSize(20)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(MijiaOverviewCardValue)
+              .maxLines(2)
+              .minFontSize(12)
+              .maxFontSize(20)
+              .heightAdaptivePolicy(TextHeightAdaptivePolicy.MIN_FONT_SIZE_FIRST)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .width('100%')
+          }
+          .alignItems(HorizontalAlign.Start)
+          .constraintSize({ minWidth: '30%' })
+          .margin({ bottom: 8 })
+        }
+      }, (readout: PropertyControlDescriptor) => `ro_${readout.siid}_${readout.piid}`)
+    }
+    .width('100%')
+    .padding(HwSpace.lg)
+    .borderRadius(HwRadius.card)
+    .backgroundColor(MijiaOverviewCard)
+    .border({ width: 1, color: '#24FFFFFF' })
+    .clip(true)
+  }
+
+  // 「更多功能」折叠入口：样式对齐页面既有 MijiaOverviewCard 卡片，
+  // 行为对齐米家扩展键——默认收起，点击展开扩展属性网格。
+  @Builder
+  extendedToggleRow() {
+    Row({ space: 10 }) {
+      Text(`更多功能 (${this.extendedControls.length})`)
+        .fontFamily(this.appFontFamily(`更多功能 (${this.extendedControls.length})`))
+        .fontWeight(this.appFontWeight())
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(MijiaOverviewCardText)
+        .layoutWeight(1)
+      Text('›')
+        .fontFamily(this.appFontFamily('›'))
+        .fontWeight(this.appFontWeight())
+        .fontSize(20)
+        .fontColor(MijiaOverviewCardText)
+        .rotate({ angle: this.showExtended ? 90 : 0 })
+    }
+    .width('100%')
+    .padding(HwSpace.md)
+    .borderRadius(HwRadius.card)
+    .backgroundColor(MijiaOverviewCard)
+    .border({ width: 1, color: '#24FFFFFF' })
+    .clip(true)
+    .onClick(() => {
+      this.showExtended = !this.showExtended;
+    })
   }
 
   // 动作区：仅在「动作」页签下展示，集中收纳设备 spec 声明的动作（aiid）。
@@ -1537,7 +1914,10 @@ export struct DeviceDetailPage {
                 .clip(true)
               }
 
-              this.trendChart()
+              // 趋势图仅温湿度计展示
+              if (this.showTrendChart()) {
+                this.trendChart()
+              }
 
               if (this.actions.length > 0) {
                 Row({ space: 12 }) {
@@ -1555,22 +1935,79 @@ export struct DeviceDetailPage {
                   .fontColor(HwColor.textPrimary)
               }
 
-              // 属性卡片：1×1 与 1×2 混合布局。
-              // 相关的只读读数（如电流/电压/功率）合并为 1×2 卡片；
-              // 读取不到数值的只读项自动隐藏。
-              if (this.activeTab === 'status' && this.controls.length > 0) {
+              // 红外遥控虚拟设备（单向通信、无可读属性）：实时状态为空时给出引导，
+              // 指引用户到「动作」页签发送指令，而不是白屏。
+              if (this.activeTab === 'status' && this.controls.length === 0 &&
+                this.extendedControls.length === 0 && this.actions.length > 0) {
+                Text('红外遥控设备：单向通信、无实时状态反馈，请切换到「动作」页签发送指令')
+                  .fontFamily(this.appFontFamily('红外遥控设备'))
+                  .fontWeight(this.appFontWeight())
+                  .fontSize(14)
+                  .fontColor(MijiaOverviewCardText)
+                  .width('100%')
+                  .textAlign(TextAlign.Center)
+                  .padding(HwSpace.lg)
+              }
+
+              // 布局：电源整排卡 → 模式类整排卡 → 1×1 小卡（滑块/开关）
+              // → 只读读数合并大卡 → 更多功能折叠区
+              if (this.activeTab === 'status' && this.powerControlList.length > 0) {
+                this.powerCard(this.powerControlList[0])
+              }
+
+              if (this.activeTab === 'status' && this.selectControlList.length > 0) {
+                ForEach(this.selectControlList, (select: PropertyControlDescriptor) => {
+                  PropertyControl({
+                    control: select,
+                    value: this.getValue(select),
+                    compact: false,
+                    selectSingleRow: true,
+                    onChanged: (value: Object) => {
+                      this.setValue(select, value);
+                    }
+                  })
+                }, (select: PropertyControlDescriptor) => `sel_${select.siid}_${select.piid}`)
+              }
+
+              if (this.activeTab === 'status' && this.smallControlList.length > 0) {
                 Flex({
                   wrap: FlexWrap.Wrap,
                   justifyContent: FlexAlign.SpaceBetween,
                   alignItems: ItemAlign.Start
                 }) {
-                  ForEach(this.buildLayoutItems(), (item: ControlLayoutItem) => {
+                  ForEach(this.buildLayoutItems(this.smallControlList), (item: ControlLayoutItem) => {
                     if (item.kind === 'group') {
                       this.readoutGroupCard(item.controls)
                     } else {
                       this.singleControlCard(item.controls[0])
                     }
                   }, (item: ControlLayoutItem) => item.key)
+                }
+                .width('100%')
+              }
+
+              if (this.activeTab === 'status' && this.readoutControlList.length > 0 &&
+                this.anyReadableValue(this.readoutControlList)) {
+                this.readoutSummaryCard(this.readoutControlList)
+              }
+
+              // 「更多功能」折叠区：收纳原版米家明面之外的扩展属性，点击展开/收起。
+              if (this.activeTab === 'status' && this.extendedControls.length > 0) {
+                this.extendedToggleRow()
+              }
+              if (this.activeTab === 'status' && this.showExtended && this.extendedControls.length > 0) {
+                Flex({
+                  wrap: FlexWrap.Wrap,
+                  justifyContent: FlexAlign.SpaceBetween,
+                  alignItems: ItemAlign.Start
+                }) {
+                  ForEach(this.buildLayoutItems(this.extendedControls), (item: ControlLayoutItem) => {
+                    if (item.kind === 'group') {
+                      this.readoutGroupCard(item.controls)
+                    } else {
+                      this.singleControlCard(item.controls[0])
+                    }
+                  }, (item: ControlLayoutItem) => `ext_${item.key}`)
                 }
                 .width('100%')
               }

@@ -60,6 +60,8 @@ export struct PropertyControl {
   @Prop @Watch('onValuePropChanged') value: Object | undefined;
   // 1×1 紧凑卡片模式（设备详情页网格），否则为整行卡片（场景动作选择页）
   @Prop compact: boolean = false;
+  // 整行模式下枚举选项单行等宽摆放（设备详情页模式/挡位卡）
+  @Prop selectSingleRow: boolean = false;
   @StorageProp('temperatureFahrenheit') temperatureFahrenheit: boolean = false;
   @StorageProp('temperatureShowUnit') temperatureShowUnit: boolean = false;
   onChanged: (value: Object) => void = (): void => {
@@ -223,7 +225,7 @@ export struct PropertyControl {
         this.compactContent()
       }
       .width('100%')
-      .constraintSize({ minHeight: 132 })
+      .constraintSize({ minHeight: 104 })
       .justifyContent(FlexAlign.SpaceBetween)
       .padding(HwSpace.md)
       .borderRadius(HwRadius.card)
@@ -585,6 +587,41 @@ export struct PropertyControl {
     }
 
     if (this.control.type === CapabilityControlType.SELECT) {
+      if (this.selectSingleRow) {
+        // 单行等宽摆放：所有挡位/模式按钮占满一排（对齐米家）
+        Row({ space: 8 }) {
+          ForEach(this.control.options, (option: string, index?: number) => {
+            Text(option)
+              .fontFamily(this.appFontFamily(option))
+              .fontWeight(this.appFontWeight())
+              .fontSize(13)
+              .fontColor(this.value === this.control.optionValues[index ?? 0]
+                ? MijiaOverviewCardValue : Color.White)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .textAlign(TextAlign.Center)
+              .height(40)
+              .constraintSize({ minWidth: 56 })
+              .padding({ left: 8, right: 8 })
+              .borderRadius(HwRadius.control)
+              .backgroundColor(this.value === this.control.optionValues[index ?? 0]
+                ? '#263379B7' : '#1A000000')
+              .border({
+                width: 1,
+                color: this.value === this.control.optionValues[index ?? 0]
+                  ? MijiaOverviewCardValue : '#24FFFFFF'
+              })
+              .clip(true)
+              .enabled(this.control.writable)
+              .layoutWeight(1)
+              .onClick(() => {
+                this.onChanged(this.control.optionValues[index ?? 0]);
+              })
+          }, (option: string, index?: number) => `row_${index ?? 0}_${option}`)
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+      } else {
       Flex({
         wrap: FlexWrap.Wrap,
         justifyContent: FlexAlign.SpaceBetween,
@@ -626,6 +663,7 @@ export struct PropertyControl {
         }, (option: string, index?: number) => `${index ?? 0}_${option}`)
       }
       .width('100%')
+      }
     }
 
     if (this.control.type === CapabilityControlType.READOUT) {

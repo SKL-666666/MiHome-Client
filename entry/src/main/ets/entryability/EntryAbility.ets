@@ -51,6 +51,7 @@ export default class EntryAbility extends UIAbility {
     const temperatureShowUnit = AppSettingsStore.getBoolean('temperatureShowUnit', false);
     const infoExcludedDevices = AppSettingsStore.getStringArray('infoExcludedDevices', []);
     const infoShowMoreContent = AppSettingsStore.getBoolean('infoShowMoreContent', true);
+    const showOverviewCards = AppSettingsStore.getBoolean('showOverviewCards', true);
     const sortDevicesByRoom = AppSettingsStore.getBoolean('sortDevicesByRoom', false);
     const fontMode = AppSettingsStore.getString('fontMode', 'system');
     const fontFamilyEn = AppSettingsStore.getString('fontFamilyEn', 'system');
@@ -86,6 +87,7 @@ export default class EntryAbility extends UIAbility {
       AppSettingsStore.setBoolean('homeSmoothSwitch', false);
     }
     AppStorage.setOrCreate('hideOfflineDevices', hideOfflineDevices);
+    AppStorage.setOrCreate('showOverviewCards', showOverviewCards);
     AppStorage.setOrCreate('selectedHomeId', selectedHomeId);
     AppStorage.setOrCreate('selectedHomeName', selectedHomeName);
     AppStorage.setOrCreate('backgroundImage', backgroundImage);

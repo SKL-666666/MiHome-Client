@@ -231,6 +231,8 @@ struct HomePage {
   @State dragHovered: boolean = false;
   private dragStartWidth: number = SIDE_BAR_WIDTH_DEFAULT;
   @StorageLink('temperatureFahrenheit') @Watch('onTemperatureUnitChanged') temperatureFahrenheit: boolean = false;
+  // 概览卡片显示开关（设置页控制）
+  @StorageLink('showOverviewCards') showOverviewCards: boolean = true;
   @StorageProp('navigationBarHeight') navigationBarHeight: number = 0;
   @StorageProp('isDarkMode') isDarkMode: boolean = false;
   @StorageLink('infoExcludedDevices') infoExcludedDevices: string[] = [];
@@ -243,6 +245,16 @@ struct HomePage {
   @State localRooms: UserRoom[] = [];
   @State selectedRoomKey: string = ROOM_ALL_KEY;
   @State roomChips: RoomChip[] = [];
+  // 快捷开关：did → 电源开关状态；未知的显示灰灯
+  @State quickPowerStates: Record<string, boolean> = {};
+  // 电源属性装载版本号：Map 本身不是状态，属性更新后靠它触发卡片重渲染
+  @State quickPowerVersion: number = 0;
+  private quickPowerProps: Map<string, AlertPropertyInfo> = new Map();
+  private quickSwitchTapHandled: boolean = false;  // 房间排序：长按拖动中（跟手偏移 + 交换动画）
+  @State draggingRoomKey: string = '';
+  @State roomDragDx: number = 0;
+  private roomDragConsumed: number = 0;
+  private roomChipWidths: Map<string, number> = new Map();
   @State filteredDevices: XiaomiDevice[] = [];
   @State searchKeyword: string = '';
   @State favoriteDevices: string[] = [];
@@ -305,6 +317,8 @@ struct HomePage {
     this.onBreakpointChange();
     this.localRooms = RoomStore.loadRooms();
     this.loadDeviceOverrides();
+    // 快捷开关：恢复上次的电源属性与状态，按钮冷启动立即可见
+    this.loadPersistedQuickPower();
     this.loadData(true);
     this.loadAccount();
     if (!this.isWearable) {
@@ -332,9 +346,10 @@ struct HomePage {
     this.loadDeviceOverrides();
     this.rebuildRoomChips();
     this.applyDeviceVisibility();
-    // 从创建智能页返回时同步本地智能，并立即补检一次到期定时
+    // 从详情页返回时同步本地智能、补检到期定时，并刷新快捷开关状态
     this.loadLocalScenes();
     this.checkDueTimers();
+    this.loadQuickSwitchStates();
   }
 
   /** 同步本地设备覆盖数据（改名 / 收藏 / 排序模式），详情页修改后返回时刷新 */
@@ -422,6 +437,7 @@ struct HomePage {
         this.selectedRoomKey = ROOM_ALL_KEY;
       }
       this.updateFilteredDevices();
+      this.loadQuickSwitchStates();
       FeedbackLogService.recordOperation('PAGE',
         `首页设备列表: 共 ${displayDevices.length} 台，${this.deviceListSummary(displayDevices)}`);
       const excludeOptions: InfoExcludeOption[] = [];
@@ -733,8 +749,139 @@ struct HomePage {
   }
 
   /** 在 spec 中查找可写布尔型电源属性 */
-  private findPowerProperty(spec: MIoTSpecInstance): AlertPropertyInfo | null {
-    for (let i = 0; i < spec.services.length; i++) {
+  private hasQuickSwitch(device: XiaomiDevice): boolean {
+    const power = this.quickPowerProps.get(device.did);
+    return power !== undefined && power.used;
+  }
+
+  /** 恢复持久化的快捷开关属性与状态（冷启动按钮立即可见，颜色为上次已知状态） */
+  private loadPersistedQuickPower(): void {
+    try {
+      const propsRaw = AppSettingsStore.getString('quick_power_props_v1', '');
+      if (propsRaw.length > 0) {
+        const props = JSON.parse(propsRaw) as Record<string, AlertPropertyInfo>;
+        const dids = Object.keys(props);
+        for (let i = 0; i < dids.length; i++) {
+          this.quickPowerProps.set(dids[i], props[dids[i]]);
+        }
+      }
+      const statesRaw = AppSettingsStore.getString('quick_power_states_v1', '');
+      if (statesRaw.length > 0) {
+        this.quickPowerStates = JSON.parse(statesRaw) as Record<string, boolean>;
+      }
+      this.quickPowerVersion++;
+    } catch (err) {
+      // 持久化数据损坏时忽略，等待重新加载
+    }
+  }
+
+  private persistQuickPowerProps(): void {
+    const payload: Record<string, AlertPropertyInfo> = {};
+    this.quickPowerProps.forEach((value: AlertPropertyInfo, did: string) => {
+      payload[did] = value;
+    });
+    AppSettingsStore.setString('quick_power_props_v1', JSON.stringify(payload));
+  }
+
+  private persistQuickPowerStates(): void {
+    AppSettingsStore.setString('quick_power_states_v1', JSON.stringify(this.quickPowerStates));
+  }
+
+  /** 首页快捷开关：并行加载每台在线设备的电源属性与当前开关状态 */
+  async loadQuickSwitchStates(): Promise<void> {
+    const tasks: Promise<void>[] = [];
+    for (let i = 0; i < this.allVisibleDevices.length; i++) {
+      const device = this.allVisibleDevices[i];
+      if (!device.online) {
+        continue;
+      }
+      tasks.push(this.loadQuickSwitchForDevice(device));
+    }
+    try {
+      await Promise.all(tasks);
+    } catch (err) {
+      // 单设备失败不影响其他设备
+    }
+    this.persistQuickPowerProps();
+  }
+
+  private async loadQuickSwitchForDevice(device: XiaomiDevice): Promise<void> {
+    let power = this.quickPowerProps.get(device.did);
+    if (power === undefined) {
+      if (this.isRouterDevice(device)) {
+        return;
+      }
+      try {
+        const context = getContext(this) as common.UIAbilityContext;
+        const spec = await xiaomiDataService.getDeviceSpecForDeviceCached(device, context);
+        const found = this.findPowerProperty(spec);
+        // 无电源属性（传感器/网关/IR 虚拟设备等）标记为不可开关，不再重试
+        power = found === null ? { siid: -1, piid: -1, used: false } : found;
+        this.quickPowerProps.set(device.did, power);
+        if (!power.used) {
+          return;
+        }
+        this.quickPowerVersion++;
+      } catch (err) {
+        // spec 加载失败，下次进入首页重试
+        return;
+      }
+    }
+    if (!power.used) {
+      return;
+    }
+    await this.refreshQuickSwitchState(device, power);
+  }
+
+  async refreshQuickSwitchState(device: XiaomiDevice, power: AlertPropertyInfo): Promise<void> {
+    try {
+      const controller = await xiaomiDataService.getDeviceController(device);
+      const results = await controller.getProperties(device.did, [
+        { did: device.did, siid: power.siid, piid: power.piid }
+      ]);
+      if (results.length > 0) {
+        const next: Record<string, boolean> = this.copyQuickPowerStates();
+        next[device.did] = results[0].value === true;
+        this.quickPowerStates = next;
+        this.persistQuickPowerStates();
+      }
+    } catch (err) {
+      // 读取失败保持未知态（灰灯）
+    }
+  }
+
+  async toggleQuickSwitch(device: XiaomiDevice): Promise<void> {
+    const power = this.quickPowerProps.get(device.did);
+    if (power === undefined || !power.used) {
+      return;
+    }
+    const current = this.quickPowerStates[device.did] === true;
+    const next: Record<string, boolean> = this.copyQuickPowerStates();
+    next[device.did] = !current;
+    this.quickPowerStates = next;
+    Haptic.soft();
+    FeedbackLogService.recordOperation('UI', `快捷开关 ${this.homeDisplayName(device)} → ${!current ? '开' : '关'}`);
+    try {
+      const controller = await xiaomiDataService.getDeviceController(device);
+      await controller.setProperty(device.did, power.siid, power.piid, !current);
+    } catch (err) {
+      // 失败回滚
+      const rollback: Record<string, boolean> = this.copyQuickPowerStates();
+      rollback[device.did] = current;
+      this.quickPowerStates = rollback;
+    }
+  }
+
+  private copyQuickPowerStates(): Record<string, boolean> {
+    const copy: Record<string, boolean> = {};
+    const dids = Object.keys(this.quickPowerStates);
+    for (let i = 0; i < dids.length; i++) {
+      copy[dids[i]] = this.quickPowerStates[dids[i]];
+    }
+    return copy;
+  }
+
+  private findPowerProperty(spec: MIoTSpecInstance): AlertPropertyInfo | null {    for (let i = 0; i < spec.services.length; i++) {
       const service = spec.services[i];
       for (let j = 0; j < service.properties.length; j++) {
         const prop = service.properties[j];
@@ -1222,6 +1369,9 @@ struct HomePage {
         if (this.isDeviceExcluded(device.did)) {
           continue;
         }
+        // 温湿度指标仅来自温度计/温湿度计/空气净化器等环境设备，
+        // 避免饮水机、灭蚊灯、插座等带温度属性的设备污染数据
+        const environmentOnly = this.isEnvironmentSensorDevice(device);
         let spec: MIoTSpecInstance;
         try {
           spec = await xiaomiDataService.getDeviceSpecForDevice(device);
@@ -1230,10 +1380,10 @@ struct HomePage {
             device.did, err instanceof Error ? err.message : String(err));
           continue;
         }
-        const temperatureProp = this.findInfoProperty(spec, ['temperature'],
+        const temperatureProp = environmentOnly ? this.findInfoProperty(spec, ['temperature'],
           ['target', 'set', 'color-temperature', 'colour-temperature', 'color temperature',
             'colour temperature', 'color.temperature', 'colour.temperature'],
-          ['kelvin', 'k']);
+          ['kelvin', 'k']) : null;
         if (temperatureProp !== null) {
           const temperatureTarget: InfoPropertyTarget = {
             did: device.did,
@@ -1245,7 +1395,7 @@ struct HomePage {
           };
           temperatureTargets.push(temperatureTarget);
         }
-        const humidityProp = this.findInfoProperty(spec, ['humidity'], ['target', 'set'], []);
+        const humidityProp = environmentOnly ? this.findInfoProperty(spec, ['humidity'], ['target', 'set'], []) : null;
         if (humidityProp !== null) {
           const humidityTarget: InfoPropertyTarget = {
             did: device.did,
@@ -1595,22 +1745,25 @@ struct HomePage {
   }
 
   /** 概览卡主数值：取全部设备平均值 */
+  /** 概览卡主数值：显示 min~max 范围（不再用平均值） */
   private formatInfoAverage(range: InfoMetricRange, unit: string): string {
     if (range.count === 0) {
       return '--';
     }
-    const average = this.displayTemperature(range.average, unit);
+    const min = this.displayTemperature(range.min, unit);
+    const max = this.displayTemperature(range.max, unit);
     const displayUnit = this.infoUnitText(this.displayTemperatureUnit(unit));
-    return `${this.formatInfoValue(average)}${displayUnit}`;
+    if (Math.abs(max - min) < 0.05) {
+      return `${this.formatInfoValue(min)}${displayUnit}`;
+    }
+    return `${this.formatInfoValue(min)}~${this.formatInfoValue(max)}${displayUnit}`;
   }
 
   private formatInfoMore(range: InfoMetricRange, deviceCount: number, unit: string): string {
     if (deviceCount === 0 || range.count === 0) {
       return '';
     }
-    const average = this.displayTemperature(range.average, unit);
-    const displayUnit = this.infoUnitText(this.displayTemperatureUnit(unit));
-    return `共 ${deviceCount} 台设备 · 平均 ${average.toFixed(1)}${displayUnit}`;
+    return `共 ${deviceCount} 台设备`;
   }
 
   private formatInfoValue(value: number): string {
@@ -1656,6 +1809,15 @@ struct HomePage {
     this.showHumiditySheet = false;
     this.showPm25Sheet = false;
     this.showOnSheet = false;
+  }
+
+  /** 环境数据设备判断：温度计/温湿度计/空气净化器等（概览温湿度只取这些设备） */
+  private isEnvironmentSensorDevice(device: XiaomiDevice): boolean {
+    const text = `${device.model} ${device.name}`.toLowerCase();
+    return text.includes('sensor') || text.includes('thermometer') || text.includes('hygro') ||
+      text.includes('miaomiaoce') || text.includes('温湿度') || text.includes('温度计') ||
+      text.includes('湿度计') || text.includes('airpurifier') || text.includes('air_purifier') ||
+      text.includes('净化');
   }
 
   private isDeviceExcluded(did: string): boolean {
@@ -2174,7 +2336,7 @@ struct HomePage {
         count: unroomed.length
       });
     }
-    this.roomChips = chips;
+    this.roomChips = this.sortRoomChipsByPreference(chips);
   }
 
   private updateFilteredDevices(): void {
@@ -2466,9 +2628,127 @@ struct HomePage {
     .borderRadius(16)
     .backgroundColor(this.selectedRoomKey === chip.key ? Color.White : (this.isDarkMode ? '#33FFFFFF' : '#14000000'))
     .alignItems(VerticalAlign.Center)
+    .opacity(this.draggingRoomKey === chip.key ? 0.92 : 1)
+    .scale(this.draggingRoomKey === chip.key ? { x: 1.06, y: 1.06 } : { x: 1, y: 1 })
+    .translate({ x: this.draggingRoomKey === chip.key ? this.roomDragDx : 0 })
+    .onAreaChange((_oldArea: Area, newArea: Area) => {
+      const widthValue = newArea.width;
+      this.roomChipWidths.set(chip.key, typeof widthValue === 'number' ? widthValue : 60);
+    })
+    .zIndex(this.draggingRoomKey === chip.key ? 10 : 1)
+    .shadow(this.draggingRoomKey === chip.key ? {
+      radius: 12, color: '#40000000', offsetY: 4
+    } : { radius: 0, color: Color.Transparent })
     .onClick(() => {
       this.selectRoom(chip.key);
     })
+    .gesture(GestureGroup(GestureMode.Sequence,
+      LongPressGesture({ repeat: false, duration: 350 })
+        .onAction(() => {
+          if (chip.key === ROOM_ALL_KEY || chip.key === ROOM_UNROOMED_KEY) {
+            return;
+          }
+          this.draggingRoomKey = chip.key;
+          this.roomDragConsumed = 0;
+          Haptic.soft();
+        }),
+      PanGesture({ fingers: 1, direction: PanDirection.Horizontal, distance: 5 })
+        .onActionUpdate((event: GestureEvent) => {
+          this.handleRoomDrag(event.offsetX);
+        })
+        .onActionEnd(() => {
+          this.endRoomDrag();
+        })
+    ))
+  }
+
+  /** 长按拖动排序：胶囊跟手移动，拖过相邻房间中线即交换（带滑动过渡） */
+  private handleRoomDrag(offsetX: number): void {
+    if (this.draggingRoomKey.length === 0) {
+      return;
+    }
+    const chips = this.roomChips;
+    let index = -1;
+    for (let i = 0; i < chips.length; i++) {
+      if (chips[i].key === this.draggingRoomKey) {
+        index = i;
+        break;
+      }
+    }
+    if (index < 0) {
+      return;
+    }
+    const effective = offsetX - this.roomDragConsumed;
+    this.roomDragDx = effective;
+    const target = effective > 0 ? index + 1 : index - 1;
+    if (target <= 0 || target >= chips.length - 1) {
+      // 不越过「全屋」/「未分类」
+      return;
+    }
+    const draggedWidth = this.roomChipWidths.get(chips[index].key) ?? 60;
+    const neighborWidth = this.roomChipWidths.get(chips[target].key) ?? 60;
+    const threshold = (draggedWidth + neighborWidth) / 2 + 4;
+    if (Math.abs(effective) < threshold) {
+      return;
+    }
+    const next = chips.slice();
+    const tmp = next[index];
+    next[index] = next[target];
+    next[target] = tmp;
+    // 拖拽基准随交换平移（进同一动画闭包：整排平滑滑动且拖拽胶囊不脱手）
+    const newConsumed = this.roomDragConsumed + (effective > 0 ? (draggedWidth + 8) : -(neighborWidth + 8));
+    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseInOut }, (): void => {
+      this.roomChips = next;
+      this.roomDragDx = offsetX - newConsumed;
+    });
+    this.roomDragConsumed = newConsumed;
+    Haptic.soft();
+  }
+
+  private endRoomDrag(): void {
+    if (this.draggingRoomKey.length === 0) {
+      return;
+    }
+    this.draggingRoomKey = '';
+    this.roomDragConsumed = 0;
+    // 松手后跟手位移平滑归位
+    this.getUIContext().animateTo({ duration: 150, curve: Curve.EaseOut }, (): void => {
+      this.roomDragDx = 0;
+    });
+    const order: string[] = [];
+    for (let i = 1; i < this.roomChips.length - 1; i++) {
+      order.push(this.roomChips[i].name);
+    }
+    AppSettingsStore.setStringArray('home_room_order_v1', order);
+  }
+
+  /** 按保存的顺序排列房间胶囊（全屋固定最前、未分类固定最后） */
+  private sortRoomChipsByPreference(chips: RoomChip[]): RoomChip[] {
+    const saved = AppSettingsStore.getStringArray('home_room_order_v1', []);
+    if (saved.length === 0 || chips.length <= 3) {
+      return chips;
+    }
+    const order = new Map<string, number>();
+    for (let i = 0; i < saved.length; i++) {
+      order.set(saved[i], i);
+    }
+    const hasUnroomed = chips[chips.length - 1].key === ROOM_UNROOMED_KEY;
+    const head: RoomChip[] = [chips[0]];
+    const tail: RoomChip[] = hasUnroomed ? [chips[chips.length - 1]] : [];
+    const middle = chips.slice(1, chips.length - (hasUnroomed ? 1 : 0));
+    middle.sort((a: RoomChip, b: RoomChip): number => {
+      const ai = order.has(a.name) ? (order.get(a.name) as number) : 9999;
+      const bi = order.has(b.name) ? (order.get(b.name) as number) : 9999;
+      return ai - bi;
+    });
+    const result: RoomChip[] = head;
+    for (let i = 0; i < middle.length; i++) {
+      result.push(middle[i]);
+    }
+    for (let i = 0; i < tail.length; i++) {
+      result.push(tail[i]);
+    }
+    return result;
   }
 
   @Builder
@@ -2773,6 +3053,26 @@ struct HomePage {
             .fontSize(14)
             .fontColor(['#FFC53D'])
         }
+
+        // 快捷开关：圆形电源按钮，开=绿灯 / 关闭或未知=灰灯（无描边）
+        // quickPowerVersion 作为渲染依赖：属性后台加载完成后触发此块重新求值
+        if (this.quickPowerVersion >= 0 && this.hasQuickSwitch(device)) {
+          Stack({ alignContent: Alignment.Center }) {
+            Circle()
+              .width(36)
+              .height(36)
+              .fill(this.quickPowerStates[device.did] === true ? HwColor.online : '#516073')
+            SymbolGlyph($r('sys.symbol.power'))
+              .fontSize(16)
+              .fontColor([this.quickPowerStates[device.did] === true ? Color.White : '#E6EEF7'])
+          }
+          .width(36)
+          .height(36)
+          .onClick(() => {
+            this.quickSwitchTapHandled = true;
+            this.toggleQuickSwitch(device);
+          })
+        }
       }
       .width('100%')
       .justifyContent(FlexAlign.Start)
@@ -2816,6 +3116,11 @@ struct HomePage {
       }
     })
     .onClick(() => {
+      if (this.quickSwitchTapHandled) {
+        // 点的是快捷开关，不进入详情页
+        this.quickSwitchTapHandled = false;
+        return;
+      }
       Haptic.soft();
       FeedbackLogService.recordOperation('UI', `点击设备 ${this.homeDisplayName(device)} (${device.did})`);
       if (this.isRouterDevice(device)) {
@@ -2906,7 +3211,8 @@ struct HomePage {
           .padding({ top: 24, bottom: 24 })
       }
 
-      if (this.selectedRoomKey === ROOM_ALL_KEY) {
+      // 概览卡片：可在设置中关闭（showOverviewCards）
+      if (this.showOverviewCards && this.selectedRoomKey === ROOM_ALL_KEY) {
         Flex({
           wrap: FlexWrap.Wrap,
           justifyContent: FlexAlign.SpaceBetween,

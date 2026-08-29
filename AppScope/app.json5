@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "com.miju.client",
     "vendor": "cashmere",
-    "versionCode": 1001100,
-    "versionName": "1.1.0",
+    "versionCode": 1001200,
+    "versionName": "1.2.0",
     "icon": "$media:ico",
     "label": "$string:app_name"
   }

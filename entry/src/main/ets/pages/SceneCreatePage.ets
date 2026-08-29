@@ -10,11 +10,12 @@
  */
 
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { HwColor, HwRadius, HwSpace, MijiaOverviewCard, MijiaOverviewCardText, MijiaOverviewCardValue, MijiaSheetBackground } from '../utils/DesignTokens';
 import { IconCircleButton } from '../components/IconCircleButton';
 import { AppBackground } from '../components/AppBackground';
 import { xiaomiDataService } from '../services/XiaomiDataService';
-import { XiaomiDevice, LocalScene, LocalSceneAction, ALL_HOMES_ID } from '../models/XiaomiHomeModels';
+import { XiaomiDevice, XiaomiHome, LocalScene, LocalSceneAction, ALL_HOMES_ID } from '../models/XiaomiHomeModels';
 import { LocalSceneStore } from '../storage/LocalSceneStore';
 import { DeviceController } from '../controllers/DeviceController';
 import { DevicePropertyParam, DevicePropertyResult } from '../controllers/DeviceTransport';
@@ -50,6 +51,8 @@ struct SceneCreatePage {
 
   @State devices: XiaomiDevice[] = [];
   @State devicesLoading: boolean = false;
+  private roomNames: Map<string, string> = new Map();
+  private roomNamesByDid: Map<string, string> = new Map();
   @State showDeviceSheet: boolean = false;
 
   @State pickerDevice: XiaomiDevice | undefined = undefined;
@@ -93,6 +96,24 @@ struct SceneCreatePage {
     }
     this.devicesLoading = true;
     try {
+      // 云端房间表：roomId → 房间名 + did → 房间名（设备列表接口不带可靠房间信息）
+      try {
+        const context = getContext(this) as common.UIAbilityContext;
+        const snapshot = await xiaomiDataService.getHomeSnapshot(context, false);
+        const homes = JSON.parse(snapshot.homesJson) as XiaomiHome[];
+        for (let h = 0; h < homes.length; h++) {
+          const rooms = homes[h].roomList;
+          for (let r = 0; r < rooms.length; r++) {
+            this.roomNames.set(rooms[r].roomId, rooms[r].name);
+            const dids = rooms[r].dids;
+            for (let d = 0; d < dids.length; d++) {
+              this.roomNamesByDid.set(dids[d], rooms[r].name);
+            }
+          }
+        }
+      } catch (err) {
+        // 房间表获取失败时退回 device.roomName
+      }
       const map = await xiaomiDataService.getDevices();
       const keys = Object.keys(map);
       const list: XiaomiDevice[] = [];
@@ -362,6 +383,29 @@ struct SceneCreatePage {
     .backgroundColor(MijiaSheetBackground)
   }
 
+  /** 设备位置：家庭 · 房间（房间名优先按 did 从云端房间归属反查） */
+  private deviceLocationText(device: XiaomiDevice): string {
+    const home = device.homeName.trim();
+    const byDid = this.roomNamesByDid.get(device.did);
+    const byRoomId = this.roomNames.get(device.roomId);
+    let room = device.roomName.trim();
+    if (byDid !== undefined && byDid.trim().length > 0) {
+      room = byDid.trim();
+    } else if (byRoomId !== undefined && byRoomId.trim().length > 0) {
+      room = byRoomId.trim();
+    }
+    if (home.length > 0 && room.length > 0) {
+      return `${home} · ${room}`;
+    }
+    if (home.length > 0) {
+      return home;
+    }
+    if (room.length > 0) {
+      return room;
+    }
+    return '未分配房间';
+  }
+
   @Builder
   deviceListContent() {
     Column({ space: 0 }) {
@@ -402,8 +446,8 @@ struct SceneCreatePage {
                     .fontColor(Color.White)
                     .maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(device.roomName.length > 0 ? device.roomName : device.homeName)
-                    .fontFamily(this.appFontFamily(device.roomName.length > 0 ? device.roomName : device.homeName))
+                  Text(this.deviceLocationText(device))
+                    .fontFamily(this.appFontFamily(this.deviceLocationText(device)))
                     .fontWeight(this.appFontWeight())
                     .fontSize(12)
                     .fontColor(MijiaOverviewCardText)
