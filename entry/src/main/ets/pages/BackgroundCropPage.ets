@@ -309,6 +309,7 @@ struct BackgroundCropPage {
       Row({ space: 12 }) {
         IconCircleButton({
           symbol: $r('sys.symbol.chevron_left'),
+          tint: '#FFFFFF',
           onAction: () => {
             router.back();
           }
@@ -318,13 +319,13 @@ struct BackgroundCropPage {
           .fontWeight(this.appFontWeight())
           .fontSize(18)
           .fontWeight(FontWeight.Bold)
-          .fontColor(HwColor.textPrimary)
+          .fontColor(Color.White)
           .layoutWeight(1)
         Text(this.saving ? '保存中...' : '完成')
           .fontFamily(this.appFontFamily(this.saving ? '保存中...' : '完成'))
           .fontWeight(this.appFontWeight())
           .fontSize(16)
-          .fontColor(this.saving ? HwColor.textSecondary : HwColor.primary)
+          .fontColor(this.saving ? '#B3FFFFFF' : Color.White)
           .padding({ left: 10, right: 10 })
           .onClick(() => {
             this.confirmCrop();
@@ -333,8 +334,11 @@ struct BackgroundCropPage {
       .width('100%')
       .height(56 + this.statusBarHeight)
       .padding({ left: 16, right: 16, top: this.statusBarHeight })
-      .backgroundColor('#59FFFFFF')
-      .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
+      .linearGradient({
+        angle: 90,
+        colors: [['#E62F658C', 0], ['#E63B7094', 0.5], ['#E646789C', 1]]
+      })
+      .backgroundEffect({ radius: 30, saturation: 1.5, color: '#33FFFFFF' })
 
       if (this.errorMessage.length > 0) {
         Text(this.errorMessage)

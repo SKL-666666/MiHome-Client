@@ -383,6 +383,7 @@ struct FontManagePage {
           symbol: $r('sys.symbol.chevron_left'),
           buttonSize: 40,
           iconSize: 20,
+          tint: '#FFFFFF',
           onAction: () => {
             router.back();
           }
@@ -393,14 +394,17 @@ struct FontManagePage {
           .margin({ left: HwSpace.md })
           .fontSize(20)
           .fontWeight(FontWeight.Bold)
-          .fontColor(HwColor.textPrimary)
+          .fontColor(Color.White)
         Blank()
       }
       .width('100%')
       .height(56 + this.statusBarHeight)
       .padding({ left: 16, right: 16, top: this.statusBarHeight })
-      .backgroundColor('#59FFFFFF')
-      .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
+      .linearGradient({
+        angle: 90,
+        colors: [['#E62F658C', 0], ['#E63B7094', 0.5], ['#E646789C', 1]]
+      })
+      .backgroundEffect({ radius: 30, saturation: 1.5, color: '#33FFFFFF' })
     }
     .width('100%')
     .height('100%')

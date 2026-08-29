@@ -285,6 +285,7 @@ struct HomePage {
   @State cloudMessageLoaded: boolean = false;
   @State unreadMessageIds: string[] = [];
   @State skeletonPlaceholders: number[] = [0, 1, 2, 3, 4, 5];
+  @State overviewSkeletonPlaceholders: number[] = [0, 1, 2, 3];
   // 通知点击直达：EntryAbility 解析 want 后写入，首页消费后清空
   @StorageProp('pendingDeviceDetailDid') @Watch('onPendingDeviceDidChanged') pendingDeviceDetailDid: string = '';
   private homeSwitchInFlight: boolean = false;
@@ -2372,7 +2373,7 @@ struct HomePage {
           .fontWeight(this.appFontWeight())
           .fontSize(20)
           .fontWeight(FontWeight.Bold)
-          .fontColor(HwColor.textPrimary)
+          .fontColor(Color.White)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         if (this.activeTab === 0 && this.selectedHomeName.length > 0) {
@@ -2380,7 +2381,7 @@ struct HomePage {
             .fontFamily(this.appFontFamily(this.selectedHomeName))
             .fontWeight(this.appFontWeight())
             .fontSize(12)
-            .fontColor(HwColor.textSecondary)
+            .fontColor('#B3FFFFFF')
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
@@ -2393,6 +2394,7 @@ struct HomePage {
           symbol: $r('sys.symbol.house'),
           buttonSize: 36,
           iconSize: 18,
+          tint: '#FFFFFF',
           onAction: (): void => {
             FeedbackLogService.recordOperation('UI', '打开选择家庭');
             this.showFamilySheet = true;
@@ -2403,8 +2405,11 @@ struct HomePage {
     .width('100%')
     .height(56 + this.statusBarHeight)
     .padding({ left: 20, right: 20, top: this.statusBarHeight })
-    .backgroundColor('#59FFFFFF')
-    .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
+    .linearGradient({
+      angle: 90,
+      colors: [['#E62F658C', 0], ['#E63B7094', 0.5], ['#E646789C', 1]]
+    })
+    .backgroundEffect({ radius: 30, saturation: 1.5, color: '#33FFFFFF' })
   }
 
   private isRouterDevice(device: XiaomiDevice): boolean {
@@ -2438,20 +2443,20 @@ struct HomePage {
         .fontFamily(this.appFontFamily(chip.name))
         .fontWeight(this.appFontWeight())
         .fontSize(14)
-        .fontColor(this.selectedRoomKey === chip.key ? HwColor.primary : Color.White)
+        .fontColor(this.selectedRoomKey === chip.key ? HwColor.primary : (this.isDarkMode ? Color.White : HwColor.textPrimary))
         .maxLines(1)
       Text(String(chip.count))
         .fontFamily(this.appFontFamily(String(chip.count)))
         .fontWeight(this.appFontWeight())
         .fontSize(11)
-        .fontColor(this.selectedRoomKey === chip.key ? HwColor.primary : Color.White)
+        .fontColor(this.selectedRoomKey === chip.key ? HwColor.primary : (this.isDarkMode ? Color.White : HwColor.textPrimary))
         .opacity(0.75)
         .maxLines(1)
     }
     .height(32)
     .padding({ left: 14, right: 14 })
     .borderRadius(16)
-    .backgroundColor(this.selectedRoomKey === chip.key ? Color.White : '#33FFFFFF')
+    .backgroundColor(this.selectedRoomKey === chip.key ? Color.White : (this.isDarkMode ? '#33FFFFFF' : '#14000000'))
     .alignItems(VerticalAlign.Center)
     .onClick(() => {
       this.selectRoom(chip.key);
@@ -2653,9 +2658,11 @@ struct HomePage {
     .borderRadius(HwRadius.card)
     .backgroundColor(MijiaOverviewCard)
     .stateStyles({ pressed: this.overviewCardPressedStyle })
+    .transition(TransitionEffect.OPACITY.animation({ duration: 240, curve: Curve.EaseOut })
+      .combine(TransitionEffect.translate({ y: 12 })))
   }
 
-  /** 设备加载中的骨架屏：模拟设备卡片布局的灰色占位块 */
+  /** 设备加载中的骨架屏：先模拟概览卡占位（仅全屋视图），再模拟设备卡片布局的灰色占位块 */
   @Builder
   deviceGridSkeleton() {
     Flex({
@@ -2663,6 +2670,37 @@ struct HomePage {
       justifyContent: FlexAlign.SpaceBetween,
       alignItems: ItemAlign.Start
     }) {
+      if (this.selectedRoomKey === ROOM_ALL_KEY) {
+        ForEach(this.overviewSkeletonPlaceholders, (item: number) => {
+          Column({ space: 8 }) {
+            Column()
+              .width(24)
+              .height(24)
+              .borderRadius(8)
+              .backgroundColor('#5C6876')
+
+            Column()
+              .height(12)
+              .borderRadius(4)
+              .backgroundColor('#5C6876')
+              .width('40%')
+
+            Column()
+              .height(22)
+              .borderRadius(4)
+              .backgroundColor('#5C6876')
+              .width('62%')
+          }
+          .width('48.5%')
+          .margin({ bottom: 12 })
+          .constraintSize({ minHeight: 118 })
+          .alignItems(HorizontalAlign.Start)
+          .padding(12)
+          .borderRadius(HwRadius.card)
+          .backgroundColor(MijiaOverviewCard)
+          .opacity(0.55)
+        }, (item: number) => `overview_skeleton_${item}`)
+      }
       ForEach(this.skeletonPlaceholders, (item: number) => {
         Column({ space: 10 }) {
           Row() {
@@ -3898,6 +3936,8 @@ struct HomePage {
     .borderRadius(HwRadius.card)
     .backgroundColor(MijiaOverviewCard)
     .stateStyles({ pressed: this.overviewCardPressedStyle })
+    .transition(TransitionEffect.OPACITY.animation({ duration: 240, curve: Curve.EaseOut })
+      .combine(TransitionEffect.translate({ y: 12 })))
   }
 
   @Builder
@@ -3942,6 +3982,8 @@ struct HomePage {
     .borderRadius(HwRadius.card)
     .backgroundColor(MijiaOverviewCard)
     .stateStyles({ pressed: this.overviewCardPressedStyle })
+    .transition(TransitionEffect.OPACITY.animation({ duration: 240, curve: Curve.EaseOut })
+      .combine(TransitionEffect.translate({ y: 12 })))
     .onClick(() => {
       this.runSceneById(scene);
     })
@@ -4052,6 +4094,8 @@ struct HomePage {
     .borderRadius(HwRadius.card)
     .backgroundColor(MijiaOverviewCard)
     .stateStyles({ pressed: this.overviewCardPressedStyle })
+    .transition(TransitionEffect.OPACITY.animation({ duration: 240, curve: Curve.EaseOut })
+      .combine(TransitionEffect.translate({ y: 12 })))
     .onClick(() => {
       if (alert.type !== 'offline') {
         this.openDeviceFromSheet(alert.did);
@@ -4066,20 +4110,20 @@ struct HomePage {
         .fontFamily(this.appFontFamily(label))
         .fontWeight(this.appFontWeight())
         .fontSize(14)
-        .fontColor(this.sceneCategory === key ? HwColor.primary : Color.White)
+        .fontColor(this.sceneCategory === key ? HwColor.primary : (this.isDarkMode ? Color.White : HwColor.textPrimary))
         .maxLines(1)
       Text(String(this.categoryCount(key)))
         .fontFamily(this.appFontFamily(String(this.categoryCount(key))))
         .fontWeight(this.appFontWeight())
         .fontSize(11)
-        .fontColor(this.sceneCategory === key ? HwColor.primary : Color.White)
+        .fontColor(this.sceneCategory === key ? HwColor.primary : (this.isDarkMode ? Color.White : HwColor.textPrimary))
         .opacity(0.75)
         .maxLines(1)
     }
     .height(32)
     .padding({ left: 14, right: 14 })
     .borderRadius(16)
-    .backgroundColor(this.sceneCategory === key ? Color.White : '#33FFFFFF')
+    .backgroundColor(this.sceneCategory === key ? Color.White : (this.isDarkMode ? '#33FFFFFF' : '#14000000'))
     .alignItems(VerticalAlign.Center)
     .onClick(() => {
       this.sceneCategory = key;
@@ -4150,9 +4194,9 @@ struct HomePage {
       })
 
       Row({ space: 8 }) {
-        this.categoryChip('local', '本地')
-        this.categoryChip('manual', '手动')
         this.categoryChip('auto', '自动化')
+        this.categoryChip('manual', '手动')
+        this.categoryChip('local', '本地')
       }
       .width('100%')
       .padding({ left: 4, right: 4 })
@@ -4206,7 +4250,7 @@ struct HomePage {
             .alignItems(VerticalAlign.Center)
             .padding({ left: 12, right: 12, top: 6, bottom: 6 })
             .borderRadius(16)
-            .backgroundColor('#99FFFFFF')
+            .backgroundColor(this.isDarkMode ? '#33FFFFFF' : '#99FFFFFF')
           }
           .justifyContent(FlexAlign.Center)
           .width('100%')
@@ -4261,7 +4305,7 @@ struct HomePage {
     Column({ space: 12 }) {
       Blank().height(this.isWideScreen ? 12 : (this.isWearable ? this.topOffset() : 4))
 
-      if (this.alertsLoading) {
+      if (this.alertsLoading && this.alerts.length === 0 && this.cloudMessages.length === 0) {
         Row() {
           Row({ space: 6 }) {
             LoadingProgress()
@@ -4277,7 +4321,7 @@ struct HomePage {
           .alignItems(VerticalAlign.Center)
           .padding({ left: 12, right: 12, top: 6, bottom: 6 })
           .borderRadius(16)
-          .backgroundColor('#99FFFFFF')
+          .backgroundColor(this.isDarkMode ? '#33FFFFFF' : '#99FFFFFF')
         }
         .justifyContent(FlexAlign.Center)
         .width('100%')

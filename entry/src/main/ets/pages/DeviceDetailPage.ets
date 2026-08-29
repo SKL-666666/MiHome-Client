@@ -122,6 +122,7 @@ export struct DeviceDetailPage {
   @State values: PropertyValueState[] = [];
   @State loading: boolean = true;
   @State refreshing: boolean = false;
+  @State refreshInFlight: boolean = false;
   @State activeTab: string = 'status';
   @State offline: boolean = false;
   @State errorMessage: string = '';
@@ -278,11 +279,15 @@ export struct DeviceDetailPage {
   }
 
   async refreshValues(): Promise<void> {
-    if (this.controller === null || this.offline) {
+    if (this.refreshInFlight) {
       return;
     }
+    this.refreshInFlight = true;
     this.refreshing = true;
     try {
+      if (this.controller === null || this.offline) {
+        return;
+      }
       const params: DevicePropertyParam[] = [];
       for (let i = 0; i < this.controls.length; i++) {
         if (!this.controls[i].readable) {
@@ -315,6 +320,7 @@ export struct DeviceDetailPage {
       this.errorMessage = err instanceof Error ? err.message : '刷新属性失败';
       Logger.error('refresh values failed, %{public}s', this.errorMessage);
     } finally {
+      this.refreshInFlight = false;
       this.refreshing = false;
     }
   }
@@ -1595,6 +1601,7 @@ export struct DeviceDetailPage {
         Row({ space: 10 }) {
           IconCircleButton({
             symbol: $r('sys.symbol.chevron_left'),
+            tint: '#FFFFFF',
             onAction: () => {
               this.pageInfos.pop();
             }
@@ -1604,18 +1611,20 @@ export struct DeviceDetailPage {
             .fontWeight(this.appFontWeight())
             .fontSize(20)
             .fontWeight(FontWeight.Bold)
-            .fontColor(HwColor.textPrimary)
+            .fontColor(Color.White)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
           IconCircleButton({
             symbol: $r('sys.symbol.square_and_pencil'),
+            tint: '#FFFFFF',
             onAction: () => {
               this.openManageSheet();
             }
           })
           IconCircleButton({
             symbol: $r('sys.symbol.arrow_counterclockwise'),
+            tint: '#FFFFFF',
             buttonEnabled: !this.refreshing,
             spinning: this.refreshing,
             onAction: () => {
@@ -1624,6 +1633,7 @@ export struct DeviceDetailPage {
           })
           IconCircleButton({
             symbol: $r('sys.symbol.info_circle'),
+            tint: '#FFFFFF',
             onAction: () => {
               this.openAboutDevice();
             }
@@ -1632,8 +1642,11 @@ export struct DeviceDetailPage {
         .width('100%')
         .height((this.isWearable ? 52 : 56) + this.statusBarHeight)
         .padding({ left: this.isWearable ? 10 : 16, right: this.isWearable ? 10 : 16, top: this.statusBarHeight })
-        .backgroundColor('#59FFFFFF')
-        .backgroundEffect({ radius: 30, saturation: 1.5, color: '#80FFFFFF' })
+        .linearGradient({
+          angle: 90,
+          colors: [['#E62F658C', 0], ['#E63B7094', 0.5], ['#E646789C', 1]]
+        })
+        .backgroundEffect({ radius: 30, saturation: 1.5, color: '#33FFFFFF' })
       }
       .width('100%')
       .height('100%')
