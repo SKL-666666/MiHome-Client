@@ -90,6 +90,8 @@
    产物位于 `entry/build/default/outputs/default/entry-default-signed.hap`
 5. 首次登录：打开米居 → 扫码页面出现后用米家 App 扫描 → 确认登录
 
+> 📖 更详细的图文步骤、无线安装、十大常见问题排查，见 **[侧载安装指南](docs/侧载安装指南.md)**。
+
 ## 🆕 更新日志
 
 ### v1.2.0
